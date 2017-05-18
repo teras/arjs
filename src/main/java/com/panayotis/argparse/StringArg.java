@@ -20,6 +20,11 @@ public class StringArg extends BaseArg<String> {
     }
 
     @Override
+    protected void set(String val) {
+        super.set(val);
+    }
+
+    @Override
     protected boolean isTransitive() {
         return true;
     }

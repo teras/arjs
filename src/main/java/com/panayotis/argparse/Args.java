@@ -13,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 
 /**
  *
@@ -21,14 +20,14 @@ import java.util.function.Consumer;
  */
 public class Args {
 
-    private final Map<String, Consumer<String>> defs = new HashMap<>();
+    private final Map<String, ArgResult> defs = new HashMap<>();
     private final Map<String, String> info = new HashMap<>();
     private final Set<String> transitive = new HashSet<>();
-    private final List<Set<Consumer<String>>> required = new ArrayList<>();
-    private final List<Set<Consumer<String>>> unique = new ArrayList<>();
-    private Consumer<List<String>> others = t -> {
-    };
-    private Consumer<String> error = err -> {
+    private final Set<ArgResult> multi = new HashSet<>();
+    private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
+    private final List<Set<ArgResult>> required = new ArrayList<>();
+    private final List<Set<ArgResult>> unique = new ArrayList<>();
+    private ArgResult error = err -> {
         throw new ArgumentException(err);
     };
 
@@ -36,7 +35,7 @@ public class Args {
         return def(arg, result::set, result.isTransitive());
     }
 
-    public Args def(String arg, Consumer<String> result) {
+    public Args def(String arg, ArgResult result) {
         return def(arg, result == null ? t -> {
         } : result, true);
     }
@@ -48,7 +47,7 @@ public class Args {
         }, false);
     }
 
-    private Args def(String arg, Consumer<String> result, boolean isTransitive) {
+    private Args def(String arg, ArgResult result, boolean isTransitive) {
         arg = checkNotExists(arg);
         if (isTransitive)
             transitive.add(arg);
@@ -69,73 +68,83 @@ public class Args {
         return this;
     }
 
+    public Args dep(String dependant, String... dependencies) {
+        dependant = checkExist(dependant);
+        depends.put(defs.get(dependant), sets(dependencies, "dependency"));
+        return this;
+    }
+
     public Args req(String... req) {
-        return sets(req, required, "requirement");
+        required.add(sets(req, "requirement"));
+        return this;
     }
 
     public Args uniq(String... uniq) {
-        return sets(uniq, unique, "uniquement");
+        unique.add(sets(uniq, "uniquement"));
+        return this;
     }
 
-    private Args sets(String[] args, List<Set<Consumer<String>>> list, String type) {
-        Set<Consumer<String>> items = new LinkedHashSet<>();
+    public Args multi(String multi) {
+        this.multi.add(defs.get(checkExist(multi)));
+        return this;
+    }
+
+    private Set<ArgResult> sets(String[] args, String type) {
+        Set<ArgResult> items = new LinkedHashSet<>();
         for (String each : args)
             items.add(defs.get(checkExist(each)));
         if (items.size() < 1)
             throw new ArgumentException("Too few arguments are defined for " + type);
-        list.add(items);
-        return this;
+        return items;
     }
 
-    public Args rest(Consumer<List<String>> others) {
-        this.others = others == null ? t -> {
-        } : others;
-        return this;
-    }
-
-    public Args error(Consumer<String> error) {
+    public Args error(ArgResult error) {
         this.error = error == null ? t -> {
         } : error;
         return this;
     }
 
-    public void parse(String... args) {
-        if (args == null || args.length == 0)
-            return;
+    public List<String> parse(String... args) {
         List<String> rest = new ArrayList<>();
-        Set<Consumer<String>> found = new HashSet<>();
+        if (args == null || args.length == 0)
+            return rest;
+        Set<ArgResult> found = new HashSet<>();
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
-            Consumer<String> cons = defs.get(arg);
+            ArgResult cons = defs.get(arg);
             if (cons != null) {
-                found.add(cons);
+                Set<ArgResult> reqDeps = depends.get(cons);
+                if (reqDeps != null && !containsAny(reqDeps, found))
+                    error.result("Argument " + getKeys(cons) + " pre-requires one of missing arguments: " + getKeys(reqDeps));
+                if (found.contains(cons)) {
+                    if (!multi.contains(cons))
+                        error.result("Argument " + getKeys(cons) + " should appear only once");
+                } else
+                    found.add(cons);
                 if (transitive.contains(arg)) {
                     i++;
                     if (i >= args.length) {
-                        if (error != null)
-                            error.accept("Too few arguments: unable to find value of argument " + arg);
+                        error.result("Too few arguments: unable to find value of argument " + arg);
                         break;
                     }
                     arg = args[i];
                 }
-                cons.accept(arg);
+                cons.result(arg);
             } else
                 rest.add(arg);
         }
         // Check Required
-        for (Set<Consumer<String>> group : required)
+        for (Set<ArgResult> group : required)
             if (getCommon(group, found).isEmpty())
-                error.accept("At least one of arguments " + getKeys(group) + " are required but none found");
+                error.result("At least one of arguments " + getKeys(group) + " are required but none found");
 
         // Check Unique
-        for (Set<Consumer<String>> group : unique) {
-            Collection<Consumer<String>> list = getCommon(group, found);
+        for (Set<ArgResult> group : unique) {
+            Collection<ArgResult> list = getCommon(group, found);
             if (list.size() > 1)
-                error.accept("Arguments " + getKeys(list) + " are unique and mutually exclusive");
+                error.result("Arguments " + getKeys(list) + " are unique and mutually exclusive");
         }
-
-        if (!rest.isEmpty())
-            others.accept(rest);
+        return rest;
     }
 
     private String checkNotExists(String arg) throws ArgumentException {
@@ -163,15 +172,22 @@ public class Args {
         return arg;
     }
 
-    private Collection<Consumer<String>> getCommon(Collection<Consumer<String>> group1, Collection<Consumer<String>> group2) {
-        Collection<Consumer<String>> list = new ArrayList<>();
-        for (Consumer<String> item : group1)
+    private <T> Collection<T> getCommon(Collection<T> group1, Collection<T> group2) {
+        Collection<T> list = new ArrayList<>();
+        for (T item : group1)
             if (group2.contains(item))
                 list.add(item);
         return list;
     }
 
-    private String getKeys(Consumer<String> cons) {
+    private <T> boolean containsAny(Collection<T> base, Collection<T> request) {
+        for (T item : request)
+            if (base.contains(item))
+                return true;
+        return false;
+    }
+
+    private String getKeys(ArgResult cons) {
         StringBuilder out = new StringBuilder();
         for (String arg : defs.keySet())
             if (defs.get(arg) == cons)
@@ -179,9 +195,9 @@ public class Args {
         return out.substring(1);
     }
 
-    private String getKeys(Collection<Consumer<String>> col) {
+    private String getKeys(Collection<ArgResult> col) {
         StringBuilder out = new StringBuilder();
-        for (Consumer<String> cons : col)
+        for (ArgResult cons : col)
             out.append(", ").append(getKeys(cons));
         return out.substring(2);
     }
