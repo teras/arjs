@@ -23,6 +23,7 @@ public class Args {
 
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
     private final Map<ArgResult, String> info = new HashMap<>();
+    private final Map<ArgResult, String> infoname = new HashMap<>();
     private final Set<ArgResult> transitive = new HashSet<>();
     private final Set<ArgResult> multi = new HashSet<>();
     private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
@@ -64,9 +65,24 @@ public class Args {
     }
 
     public Args info(String arg, String info) {
-        if (info != null && !info.trim().isEmpty()) {
-            arg = checkExist(arg);
-            this.info.put(defs.get(arg), info);
+        return info(arg, info, null);
+    }
+
+    public Args info(String arg, String info, String argumentName) {
+        arg = checkExist(arg);
+        ArgResult ares = defs.get(arg);
+        if (info != null) {
+            info = info.trim();
+            if (!info.isEmpty())
+                this.info.put(ares, info);
+        }
+        if (argumentName != null) {
+            argumentName = argumentName.trim();
+            if (!argumentName.isEmpty()) {
+                if (!transitive.contains(ares))
+                    throw new ArgumentException("Trying to set argument value name " + argumentName + " to non transitive parameter " + getArg(ares));
+                this.infoname.put(ares, argumentName);
+            }
         }
         return this;
     }
@@ -256,7 +272,22 @@ public class Args {
     }
 
     private String getArgWithParam(ArgResult arg) {
-        return getArg(arg) + (transitive.contains(arg) ? " \"argument\"" : "");
+        if (!transitive.contains(arg))
+            return getArg(arg);
+        String name = infoname.get(arg);
+        if (name == null) {
+            name = "";
+            for (String argname : defs.keySet())
+                if (argname.startsWith("-") && defs.get(argname) == arg) {
+                    while (argname.startsWith("-"))
+                        argname = argname.substring(1);
+                    if (name.length() < argname.length())
+                        name = argname;
+                }
+            if (name.length() < 3)
+                name = "arg";
+        }
+        return getArg(arg) + " \"" + name + "\"";
     }
 
     private String getArgsWithPlural(Collection<ArgResult> list) {
