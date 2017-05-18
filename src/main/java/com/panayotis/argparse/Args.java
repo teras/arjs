@@ -23,6 +23,10 @@ public class Args {
 
     private final static String NL = System.getProperty("line.separator", "\n");
     private final static String INSET = "  ";
+    private final ArgResult HELP = t -> {
+        System.out.print(toString());
+        System.exit(0);
+    };
 
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
     private final Map<ArgResult, String> info = new HashMap<>();
@@ -51,6 +55,13 @@ public class Args {
             if (found != null)
                 found.run();
         }, false);
+    }
+
+    public Args defhelp(String... helpargs) {
+        for (String arg : helpargs)
+            defs.put(checkNotExists(arg), HELP);
+        info.put(HELP, "application usage, this text");
+        return this;
     }
 
     private Args def(String arg, ArgResult result, boolean isTransitive) {
@@ -187,7 +198,7 @@ public class Args {
     @Override
     public String toString() {
         if (defs.isEmpty())
-            return "[No arguments defined]";
+            return "[No arguments defined]" + NL;
         StringBuilder out = new StringBuilder();
 
         if (!usages.isEmpty()) {
@@ -203,34 +214,37 @@ public class Args {
 
         out.append("List of arguments:").append(NL);
         for (ArgResult infoed : infoArgs)
-            out.append(INSET).append(getArgWithParam(infoed, true)).append(" : ").append(info.get(infoed)).append(NL).append(NL);
+            out.append(INSET).append(getArgWithParam(infoed, true)).append(" : ").append(info.get(infoed)).append(NL);
         if (!otherArgs.isEmpty()) {
             if (!infoArgs.isEmpty())
-                out.append("Other arguments:").append(NL);
+                out.append(NL).append("Other arguments:").append(NL);
             for (ArgResult bare : otherArgs)
                 out.append(INSET).append(getArgWithParam(bare, true)).append(NL);
-            out.append(NL);
         }
 
-        for (Set<ArgResult> set : required)
-            out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
-        if (!required.isEmpty())
+        if (!required.isEmpty()) {
             out.append(NL);
+            for (Set<ArgResult> set : required)
+                out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
+        }
 
-        for (Set<ArgResult> set : unique)
-            out.append("Only one of argument").append(getArgsWithPlural(set)).append(" could be used simultaneously; they are mutually exclusive.").append(NL);
-        if (!unique.isEmpty())
+        if (!unique.isEmpty()) {
             out.append(NL);
+            for (Set<ArgResult> set : unique)
+                out.append("Only one of argument").append(getArgsWithPlural(set)).append(" could be used simultaneously; they are mutually exclusive.").append(NL);
+        }
 
-        for (ArgResult m : depends.keySet())
-            out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
-        if (!depends.isEmpty())
+        if (!depends.isEmpty()) {
             out.append(NL);
+            for (ArgResult m : depends.keySet())
+                out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
+        }
 
-        for (ArgResult m : multi)
-            out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
-        if (!multi.isEmpty())
+        if (!multi.isEmpty()) {
             out.append(NL);
+            for (ArgResult m : multi)
+                out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
+        }
 
         return out.toString();
     }
