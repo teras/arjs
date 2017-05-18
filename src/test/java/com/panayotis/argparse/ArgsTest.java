@@ -57,7 +57,7 @@ public class ArgsTest {
         args.parse(new String[]{"-o", "something", "--run"});
         System.out.println(error.get());
         assertTrue("Wrong type of error, expected \"uniq\"", error.get() != null && error.get().contains("uniq"));
-        assertTrue("Error should contain ' -o|--output, --run' ", error.get().contains(" -o|--output, --run"));
+        assertTrue("Error should contain '[-o|--output, --run]' ", error.get().contains("[-o|--output, --run]"));
 
         reset(help, run, output, error, multi);
         rest2 = args.parse(new String[]{"-h", "-h", "unknown", "--help"});
