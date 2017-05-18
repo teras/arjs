@@ -6,6 +6,7 @@
 package com.panayotis.argparse;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,6 +37,7 @@ public class Args {
     private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
+    private final Map<String, Set<ArgResult>> groups = new LinkedHashMap<>();
     private final List<List<String>> usages = new ArrayList<>();
     private ArgResult error = err -> {
         throw new ArgumentException(err);
@@ -123,6 +125,16 @@ public class Args {
         return this;
     }
 
+    public Args group(String groupname, String... items) {
+        if (groupname == null)
+            groupname = "";
+        groupname = groupname.trim();
+        if (groupname.isEmpty())
+            throw new ArgumentException("Group name should not be empty");
+        groups.put(groupname, sets(items, 1, "grouping"));
+        return this;
+    }
+
     /**
      * usage
      *
@@ -207,20 +219,7 @@ public class Args {
             out.append(NL);
         }
 
-        LinkedHashSet<ArgResult> otherArgs = new LinkedHashSet<>(defs.values());
-        otherArgs.removeAll(info.keySet());
-        LinkedHashSet<ArgResult> infoArgs = new LinkedHashSet<>(defs.values());
-        infoArgs.removeAll(otherArgs);
-
-        out.append("List of arguments:").append(NL);
-        for (ArgResult infoed : infoArgs)
-            out.append(INSET).append(getArgWithParam(infoed, true)).append(" : ").append(info.get(infoed)).append(NL);
-        if (!otherArgs.isEmpty()) {
-            if (!infoArgs.isEmpty())
-                out.append(NL).append("Other arguments:").append(NL);
-            for (ArgResult bare : otherArgs)
-                out.append(INSET).append(getArgWithParam(bare, true)).append(NL);
-        }
+        groupArgs(new LinkedHashSet<>(defs.values()), out);
 
         if (!required.isEmpty()) {
             out.append(NL);
@@ -247,6 +246,56 @@ public class Args {
         }
 
         return out.toString();
+    }
+
+    private void groupArgs(Set<ArgResult> args, StringBuilder out) {
+        List<List<String>> lefts = new ArrayList<>();
+        List<List<String>> rights = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        int max = 0;
+        if (groups.isEmpty()) {
+            names.add("Arguments");
+            max = singleGroupCalc(args, lefts, rights);
+        } else {
+            Set<ArgResult> missing = new LinkedHashSet<>(defs.values());
+            for (String name : groups.keySet()) {
+                Set<ArgResult> groupItems = groups.get(name);
+                missing.removeAll(groupItems);
+                names.add(name);
+                max = Math.max(max, singleGroupCalc(groupItems, lefts, rights));
+            }
+            names.add("Generic arguments");
+            max = Math.max(max, singleGroupCalc(missing, lefts, rights));
+        }
+        max++;
+        for (int i = 0; i < names.size(); i++) {
+            if (i != 0)
+                out.append(NL);
+            singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, out);
+        }
+    }
+
+    private int singleGroupCalc(Set<ArgResult> args, List<List<String>> lefts, List<List<String>> rights) {
+        int maxsize = 0;
+        List<String> leftPart = new ArrayList<>();
+        List<String> rightPart = new ArrayList<>();
+        lefts.add(leftPart);
+        rights.add(rightPart);
+        for (ArgResult arg : args) {
+            String left = getArgWithParam(arg, true);
+            leftPart.add(left);
+            String right = info.get(arg);
+            rightPart.add(right == null ? "" : ": " + right);
+            maxsize = Math.max(maxsize, left.length());
+        }
+        return maxsize;
+    }
+
+    private void singleGroupPrint(String title, List<String> leftPart, List<String> rightPart, int maxsize, StringBuilder out) {
+        out.append(title).append(":").append(NL);
+        for (int i = 0; i < leftPart.size(); i++)
+            out.append(INSET).append(leftPart.get(i)).append(spaces(maxsize - leftPart.get(i).length())).
+                    append(rightPart.get(i)).append(NL);
     }
 
     private String usages() {
@@ -403,6 +452,12 @@ public class Args {
         out.append(" ");
         out.append(getArgs(list));
         return out.toString();
+    }
+
+    private String spaces(int i) {
+        char[] chars = new char[i];
+        Arrays.fill(chars, ' ');
+        return new String(chars);
     }
 
 }
