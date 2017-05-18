@@ -21,6 +21,9 @@ import java.util.Set;
  */
 public class Args {
 
+    private final static String NL = System.getProperty("line.separator", "\n");
+    private final static String INSET = "  ";
+
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
     private final Map<ArgResult, String> info = new HashMap<>();
     private final Map<ArgResult, String> infoname = new HashMap<>();
@@ -29,6 +32,7 @@ public class Args {
     private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
+    private final List<List<String>> usages = new ArrayList<>();
     private ArgResult error = err -> {
         throw new ArgumentException(err);
     };
@@ -108,13 +112,27 @@ public class Args {
         return this;
     }
 
-    private Set<ArgResult> sets(String[] args, int minimum, String type) {
-        Set<ArgResult> items = new LinkedHashSet<>();
-        for (String each : args)
-            items.add(defs.get(checkExist(each)));
-        if (items.size() < minimum)
-            throw new ArgumentException("Too few arguments are defined for " + type);
-        return items;
+    /**
+     * usage
+     *
+     * @param args This is the only situation that an argument might not be
+     * valid
+     * @return self
+     */
+    public Args usage(String... args) {
+        if (args == null || args.length == 0)
+            throw new ArgumentException("Argument usage should have at least one argument");
+        List<String> items = new ArrayList<>();
+        for (String arg : args) {
+            if (arg == null)
+                arg = "";
+            arg = arg.trim();
+            if (arg.isEmpty())
+                throw new ArgumentException("Argument usage could not be empty");
+            items.add(arg);
+        }
+        usages.add(items);
+        return this;
     }
 
     public Args error(ArgResult error) {
@@ -166,6 +184,102 @@ public class Args {
         return rest;
     }
 
+    @Override
+    public String toString() {
+        if (defs.isEmpty())
+            return "[No arguments defined]";
+        StringBuilder out = new StringBuilder();
+
+        if (!usages.isEmpty()) {
+            out.append("Usage:").append(NL);
+            out.append(usages());
+            out.append(NL);
+        }
+
+        LinkedHashSet<ArgResult> otherArgs = new LinkedHashSet<>(defs.values());
+        otherArgs.removeAll(info.keySet());
+        LinkedHashSet<ArgResult> infoArgs = new LinkedHashSet<>(defs.values());
+        infoArgs.removeAll(otherArgs);
+
+        out.append("List of arguments:").append(NL);
+        for (ArgResult infoed : infoArgs)
+            out.append(INSET).append(getArgWithParam(infoed, true)).append(" : ").append(info.get(infoed)).append(NL).append(NL);
+        if (!otherArgs.isEmpty()) {
+            if (!infoArgs.isEmpty())
+                out.append("Other arguments:").append(NL);
+            for (ArgResult bare : otherArgs)
+                out.append(INSET).append(getArgWithParam(bare, true)).append(NL);
+            out.append(NL);
+        }
+
+        for (Set<ArgResult> set : required)
+            out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
+        if (!required.isEmpty())
+            out.append(NL);
+
+        for (Set<ArgResult> set : unique)
+            out.append("Only one of argument").append(getArgsWithPlural(set)).append(" could be used simultaneously; they are mutually exclusive.").append(NL);
+        if (!unique.isEmpty())
+            out.append(NL);
+
+        for (ArgResult m : depends.keySet())
+            out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
+        if (!depends.isEmpty())
+            out.append(NL);
+
+        for (ArgResult m : multi)
+            out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
+        if (!multi.isEmpty())
+            out.append(NL);
+
+        return out.toString();
+    }
+
+    private String usages() {
+        StringBuilder out = new StringBuilder();
+        Collection<ArgResult> wrongParams = new LinkedHashSet<>();
+        for (List<String> usage : usages) {
+            StringBuilder line = new StringBuilder();
+            List<ArgResult> trackUnique = new ArrayList<>();
+            Set<ArgResult> upToNow = new HashSet<>();
+            for (String arg : usage) {
+                ArgResult res = defs.get(arg);
+                if (res == null) {
+                    line.append(" ").append(arg);
+                    trackUnique.clear();
+                } else {
+                    trackUnique.add(res);
+                    if (trackUnique.size() > 2)
+                        trackUnique.remove(0);
+
+                    Set<ArgResult> reqDeps = depends.get(res);
+                    boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
+                    if (missing)
+                        wrongParams.add(res);
+                    upToNow.add(res);
+
+                    boolean req = isInCollection(required, res);
+                    line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
+                            append(req ? "" : "]").append(missing ? "^" : "");
+                }
+            }
+            out.append(INSET).append(line.substring(1)).append(NL);
+        }
+        if (!wrongParams.isEmpty())
+            out.append("Notes:").append(NL).append(INSET).append("^some pre-required arguments of the argument").
+                    append(getArgsWithPlural(wrongParams)).append(" have been hidden for clarity").append(NL);
+        return out.toString();
+    }
+
+    private Set<ArgResult> sets(String[] args, int minimum, String type) {
+        Set<ArgResult> items = new LinkedHashSet<>();
+        for (String each : args)
+            items.add(defs.get(checkExist(each)));
+        if (items.size() < minimum)
+            throw new ArgumentException("Too few arguments are defined for " + type);
+        return items;
+    }
+
     private String checkNotExists(String arg) throws ArgumentException {
         arg = checkValid(arg);
         if (defs.containsKey(arg))
@@ -206,6 +320,22 @@ public class Args {
         return false;
     }
 
+    private <T> boolean isInCollection(Collection<Set<T>> collection, T arg) {
+        for (Set<T> set : collection)
+            if (set.contains(arg))
+                return true;
+        return false;
+    }
+
+    private <T> boolean isUnique(Collection<Set<T>> sets, Collection<T> toCheck) {
+        if (toCheck.size() < 2)
+            return false;
+        for (Set<T> group : sets)
+            if (getCommon(group, toCheck).size() == 2)
+                return true;
+        return false;
+    }
+
     private String getArg(ArgResult cons) {
         return getArg(cons, false);
     }
@@ -233,57 +363,9 @@ public class Args {
         return "[" + out.substring(2) + "]";
     }
 
-    @Override
-    public String toString() {
-        if (defs.isEmpty())
-            return "[No arguments defined]";
-
-        StringBuilder out = new StringBuilder();
-        String NL = System.getProperty("line.separator", "\n");
-        String inset = "  ";
-
-        LinkedHashSet<ArgResult> otherArgs = new LinkedHashSet<>(defs.values());
-        otherArgs.removeAll(info.keySet());
-        LinkedHashSet<ArgResult> infoArgs = new LinkedHashSet<>(defs.values());
-        infoArgs.removeAll(otherArgs);
-
-        out.append("List of arguments:").append(NL);
-        for (ArgResult infoed : infoArgs)
-            out.append(inset).append(getArgWithParam(infoed)).append(" : ").append(info.get(infoed)).append(NL).append(NL);
-        if (!otherArgs.isEmpty()) {
-            if (!infoArgs.isEmpty())
-                out.append("Other arguments:").append(NL);
-            for (ArgResult bare : otherArgs)
-                out.append(inset).append(getArgWithParam(bare)).append(NL);
-            out.append(NL);
-        }
-
-        for (Set<ArgResult> set : required)
-            out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
-        if (!required.isEmpty())
-            out.append(NL);
-
-        for (Set<ArgResult> set : unique)
-            out.append("Only one of argument").append(getArgsWithPlural(set)).append(" could be used simultaneously; they are mutually exclusive.").append(NL);
-        if (!unique.isEmpty())
-            out.append(NL);
-
-        for (ArgResult m : depends.keySet())
-            out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
-        if (!depends.isEmpty())
-            out.append(NL);
-
-        for (ArgResult m : multi)
-            out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
-        if (!multi.isEmpty())
-            out.append(NL);
-
-        return out.toString();
-    }
-
-    private String getArgWithParam(ArgResult arg) {
+    private String getArgWithParam(ArgResult arg, boolean full) {
         if (!transitive.contains(arg))
-            return getArg(arg, true);
+            return getArg(arg, full);
         String name = infoname.get(arg);
         if (name == null) {
             name = "";
@@ -297,7 +379,7 @@ public class Args {
             if (name.length() < 3)
                 name = "arg";
         }
-        return getArg(arg, true) + " \"" + name + "\"";
+        return getArg(arg, full) + " \"" + name + "\"";
     }
 
     private String getArgsWithPlural(Collection<ArgResult> list) {
