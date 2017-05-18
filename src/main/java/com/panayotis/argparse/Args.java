@@ -207,11 +207,21 @@ public class Args {
     }
 
     private String getArg(ArgResult cons) {
-        StringBuilder out = new StringBuilder();
+        return getArg(cons, false);
+    }
+
+    private String getArg(ArgResult cons, boolean full) {
+        StringBuilder name = new StringBuilder();
         for (String arg : defs.keySet())
-            if (defs.get(arg) == cons)
-                out.append("|").append(arg);
-        return out.substring(1);
+            if (defs.get(arg) == cons) {
+                if (!full) {
+                    if (arg.length() <= (name.length() - 1))
+                        continue;
+                    name.delete(0, name.length());
+                }
+                name.append("|").append(arg);
+            }
+        return name.substring(1);
     }
 
     private String getArgs(Collection<ArgResult> col) {
@@ -248,18 +258,8 @@ public class Args {
             out.append(NL);
         }
 
-        for (ArgResult m : multi)
-            out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
-        if (!multi.isEmpty())
-            out.append(NL);
-
-        for (ArgResult m : depends.keySet())
-            out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
-        if (!depends.isEmpty())
-            out.append(NL);
-
         for (Set<ArgResult> set : required)
-            out.append("Any one of argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
+            out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
         if (!required.isEmpty())
             out.append(NL);
 
@@ -268,12 +268,22 @@ public class Args {
         if (!unique.isEmpty())
             out.append(NL);
 
+        for (ArgResult m : depends.keySet())
+            out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
+        if (!depends.isEmpty())
+            out.append(NL);
+
+        for (ArgResult m : multi)
+            out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
+        if (!multi.isEmpty())
+            out.append(NL);
+
         return out.toString();
     }
 
     private String getArgWithParam(ArgResult arg) {
         if (!transitive.contains(arg))
-            return getArg(arg);
+            return getArg(arg, true);
         String name = infoname.get(arg);
         if (name == null) {
             name = "";
@@ -287,7 +297,7 @@ public class Args {
             if (name.length() < 3)
                 name = "arg";
         }
-        return getArg(arg) + " \"" + name + "\"";
+        return getArg(arg, true) + " \"" + name + "\"";
     }
 
     private String getArgsWithPlural(Collection<ArgResult> list) {
