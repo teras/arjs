@@ -512,10 +512,11 @@ public class Args {
                     if (name.length() < argname.length())
                         name = argname;
                 }
+            name = name.toUpperCase();
             if (name.length() < 3)
-                name = "arg";
+                name = "ARG";
         }
-        return getArg(arg, full) + " \"" + name + "\"";
+        return getArg(arg, full) + " " + name;
     }
 
     private Collection<String> getArgsValues(Collection<ArgResult> args) {
