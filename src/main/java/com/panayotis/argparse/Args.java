@@ -10,9 +10,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,6 +44,8 @@ public class Args {
     private ArgResult error = err -> {
         throw new ArgumentException(err);
     };
+    private boolean supportEqual = false;
+    private boolean supportCondenced = false;
 
     public Args def(String arg, BaseArg<?> result) {
         return def(arg, result::set, result.isTransitive());
@@ -135,6 +139,16 @@ public class Args {
         return this;
     }
 
+    public Args setCondenced(boolean supportCondenced) {
+        this.supportCondenced = supportCondenced;
+        return this;
+    }
+
+    public Args setEqualSign(boolean supportEqual) {
+        this.supportEqual = supportEqual;
+        return this;
+    }
+
     /**
      * usage
      *
@@ -169,8 +183,9 @@ public class Args {
         if (args == null || args.length == 0)
             return rest;
         Set<ArgResult> found = new HashSet<>();
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i];
+        Iterator<String> iterator = canonicalArgs(args);
+        while (iterator.hasNext()) {
+            String arg = iterator.next();
             ArgResult cons = defs.get(arg);
             if (cons != null) {
                 Set<ArgResult> reqDeps = depends.get(cons);
@@ -182,12 +197,11 @@ public class Args {
                 } else
                     found.add(cons);
                 if (transitive.contains(cons)) {
-                    i++;
-                    if (i >= args.length) {
+                    if (!iterator.hasNext()) {
                         error.result("Too few arguments: unable to find value of argument " + arg);
                         break;
                     }
-                    arg = args[i];
+                    arg = iterator.next();
                 }
                 cons.result(arg);
             } else
@@ -245,7 +259,66 @@ public class Args {
                 out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
         }
 
+        if (supportCondenced) {
+        }
+        if (supportEqual) {
+        }
+
         return out.toString();
+    }
+
+    private Iterator<String> canonicalArgs(String[] args) {
+        List<String> source = Arrays.asList(args);
+        Collection<String> argname = defs.keySet();
+        Collection<String> trans = getArgsValues(this.transitive);
+        if (supportEqual) {
+            int eq = 0;
+            List<String> result = new ArrayList<>();
+            for (String item : source)
+                if (item.startsWith("-") && (eq = item.indexOf("=")) > 0 && argname.contains(item.substring(0, eq))) {
+                    result.add(item.substring(0, eq));
+                    result.add(item.length() > (eq + 1) ? item.substring(eq + 1) : "");
+                } else
+                    result.add(item);
+            source = result;
+        }
+        if (supportCondenced) {
+            List<String> result = new ArrayList<>();
+            ListIterator<String> it = source.listIterator();
+            while (it.hasNext()) {
+                String item = it.next();
+                Collection<String> vals = new ArrayList<>();
+                boolean correct = true;
+                int rollback = 0;
+                if (item.startsWith("-") && item.length() > 1 && item.charAt(1) != '-')
+                    for (char argC : item.substring(1).toCharArray()) {
+                        String arg = "-" + argC;
+                        if (!argname.contains(arg)) {
+                            correct = false;
+                            break;
+                        }
+                        vals.add(arg);
+                        if (trans.contains(arg)) {
+                            if (!it.hasNext()) {
+                                correct = false;
+                                break;
+                            }
+                            rollback++;
+                            vals.add(it.next());
+                        }
+                    }
+                else
+                    correct = false;
+                if (!correct) {
+                    for (int i = 0; i < rollback; i++)
+                        it.previous();
+                    result.add(item);
+                } else
+                    result.addAll(vals);
+            }
+            source = result;
+        }
+        return source.iterator();
     }
 
     private void groupArgs(Set<ArgResult> args, StringBuilder out) {
@@ -443,6 +516,14 @@ public class Args {
                 name = "arg";
         }
         return getArg(arg, full) + " \"" + name + "\"";
+    }
+
+    private Collection<String> getArgsValues(Collection<ArgResult> args) {
+        Collection<String> res = new LinkedHashSet<>();
+        for (String arg : defs.keySet())
+            if (args.contains(defs.get(arg)))
+                res.add(arg);
+        return res;
     }
 
     private String getArgsWithPlural(Collection<ArgResult> list) {
