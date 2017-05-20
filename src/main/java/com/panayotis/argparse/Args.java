@@ -39,6 +39,7 @@ public class Args {
     private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
+    private final Set<ArgResult> nullable = new HashSet<>();
     private final Map<String, Set<ArgResult>> groups = new LinkedHashMap<>();
     private final List<List<String>> usages = new ArrayList<>();
     private ArgResult error = err -> {
@@ -116,6 +117,11 @@ public class Args {
 
     public Args req(String... req) {
         required.add(sets(req, 1, "requirement"));
+        return this;
+    }
+
+    public Args nullable(String... nullable) {
+        this.nullable.addAll(sets(nullable, 1, "nullable parameters"));
         return this;
     }
 
@@ -203,6 +209,8 @@ public class Args {
                     }
                     arg = iterator.next();
                 }
+                if (!nullable.contains(cons) && arg.isEmpty())
+                    error.result("Parameter " + getArg(cons) + " should not have an empty value");
                 cons.result(arg);
             } else
                 rest.add(arg);
@@ -210,13 +218,13 @@ public class Args {
         // Check Required
         for (Set<ArgResult> group : required)
             if (getCommon(group, found).isEmpty())
-                error.result("At least one of arguments " + getArgs(group) + " are required but none found");
+                error.result("At least one of argument" + getArgsWithPlural(group) + " are required but none found");
 
         // Check Unique
         for (Set<ArgResult> group : unique) {
             Collection<ArgResult> list = getCommon(group, found);
             if (list.size() > 1)
-                error.result("Arguments " + getArgs(list) + " are unique and mutually exclusive");
+                error.result("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
         }
         return rest;
     }
