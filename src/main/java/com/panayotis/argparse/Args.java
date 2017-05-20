@@ -246,7 +246,7 @@ public class Args {
         if (!required.isEmpty()) {
             out.append(NL);
             for (Set<ArgResult> set : required)
-                out.append("One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
+                out.append(set.size() == 1 ? "Argument" : "One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
         }
 
         if (!unique.isEmpty()) {
