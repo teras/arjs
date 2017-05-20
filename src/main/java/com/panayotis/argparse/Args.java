@@ -8,6 +8,7 @@ package com.panayotis.argparse;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -186,8 +187,6 @@ public class Args {
 
     public List<String> parse(String... args) {
         List<String> rest = new ArrayList<>();
-        if (args == null || args.length == 0)
-            return rest;
         Set<ArgResult> found = new HashSet<>();
         Iterator<String> iterator = canonicalArgs(args);
         while (iterator.hasNext()) {
@@ -291,7 +290,7 @@ public class Args {
     }
 
     private Iterator<String> canonicalArgs(String[] args) {
-        List<String> source = Arrays.asList(args);
+        List<String> source = args == null ? Collections.EMPTY_LIST : Arrays.asList(args);
         Collection<String> argname = defs.keySet();
         Collection<String> trans = getArgsValues(this.transitive);
         if (supportEqual) {
