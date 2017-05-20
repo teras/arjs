@@ -217,8 +217,11 @@ public class Args {
         }
         // Check Required
         for (Set<ArgResult> group : required)
-            if (getCommon(group, found).isEmpty())
-                error.result("At least one of argument" + getArgsWithPlural(group) + " are required but none found");
+            if (shouldNotMiss(group, found))
+                if (group.size() == 1)
+                    error.result("Argument " + getArg(group.iterator().next()) + " is required but not found");
+                else
+                    error.result("At least one of arguments " + getArgs(group) + " are required but none found");
 
         // Check Unique
         for (Set<ArgResult> group : unique) {
@@ -227,6 +230,18 @@ public class Args {
                 error.result("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
         }
         return rest;
+    }
+
+    private boolean shouldNotMiss(Collection<ArgResult> required, Collection<ArgResult> found) {
+        if (!getCommon(required, found).isEmpty())
+            return false;   // required item(s) found
+        // Maybe it is missing due to dependencies.
+        for (ArgResult req : required) {
+            Set<ArgResult> deps = depends.get(req);
+            if (deps == null || !getCommon(deps, found).isEmpty())   // no dependencies found, or dependenices are already present
+                return true;
+        }
+        return false;   // All have missing requirements, so none could be used anyways
     }
 
     @Override
@@ -451,9 +466,10 @@ public class Args {
 
     private <T> Collection<T> getCommon(Collection<T> group1, Collection<T> group2) {
         Collection<T> list = new ArrayList<>();
-        for (T item : group1)
-            if (group2.contains(item))
-                list.add(item);
+        if (group1 != null && group2 != null)
+            for (T item : group1)
+                if (group2.contains(item))
+                    list.add(item);
         return list;
     }
 
