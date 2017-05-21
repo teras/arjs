@@ -460,8 +460,36 @@ public class Args {
         }
 
         if (condensedChar != '\0') {
+            List<String> single = new ArrayList<>();
+            List<Object> trans = new ArrayList<>();
+            int idx = 1;
+            for (String key : defs.keySet())
+                if (key.length() == 2 && key.charAt(0) == condensedChar) {
+                    ArgResult arg = defs.get(key);
+                    if (multi.contains(defs.get(key))) {
+                        single.add(key.substring(1));
+                        trans.add(transitive.contains(arg) ? " ARG" + (idx++) : "");
+                    }
+                    single.add(key.substring(1));
+                    trans.add(transitive.contains(arg) ? " ARG" + (idx++) : "");
+                    if (single.size() > 1)
+                        break;
+                }
+            if (single.size() > 1) {    // Parameters permit it
+                out.append(NL);
+                out.append("Single letter arguments that start with the character `").append(condensedChar).
+                        append("` could be grouped together. For example the '");
+                out.append(condensedChar).append(single.get(0)).append(trans.get(0)).append(" ").append(condensedChar).append(single.get(1)).append(trans.get(1));
+                out.append("' arguments could be written as '");
+                out.append(condensedChar).append(single.get(0)).append(single.get(1)).append(trans.get(0)).append(trans.get(1)).append("'.").append(NL);
+            }
         }
-        if (joinedChar != '\0') {
+
+        if (joinedChar != '\0' && !transitive.isEmpty()) {
+            out.append(NL);
+            String param = getArg(transitive.iterator().next());
+            out.append("Arguments with values are allowed to use the `").append(joinedChar).append("` character to assign their value. For example the '").
+                    append(param).append(" ARG1' argument could be written as '").append(param).append(joinedChar).append("ARG'.");
         }
 
         return out.toString();
