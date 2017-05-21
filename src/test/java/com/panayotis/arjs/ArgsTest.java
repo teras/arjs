@@ -22,6 +22,26 @@ public class ArgsTest {
     }
 
     @Test
+    public void testJoinedAndCondensed() {
+        MultiBoolArg mboolA = new MultiBoolArg();
+        MultiBoolArg mboolB = new MultiBoolArg();
+        MultiStringArg mstring = new MultiStringArg();
+        Args args = new Args();
+        args.
+                def("/a", mboolA).
+                def("/b", mboolB).
+                def("/s", mstring);
+
+        args.setCondensed('/');
+        args.setJoined(':');
+        List<String> free = args.parse("/a", "/aa", "/aaasbbasa", "one", "two", "/s:three", "/b", "/a:another", "/s", "four", "/s:five", "/b");
+        assertEquals("Condensed notation error with paramter /a,", (Integer) 8, mboolA.get());
+        assertEquals("Condensed notation error with paramter /b,", (Integer) 4, mboolB.get());
+        assertEquals("Multi string with condensed mode", "[one, two, three, four, five]", mstring.get().toString());
+        assertEquals("A free parameter should exist, since /a is not a transitive parameter,", "[/a:another]", free.toString());
+    }
+
+    @Test
     public void testArgs() {
         BoolArg bool = new BoolArg();
         StringArg string = new StringArg();

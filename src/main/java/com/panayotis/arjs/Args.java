@@ -44,18 +44,45 @@ public class Args {
     private ArgResult error = err -> {
         throw new ArgumentException(err);
     };
-    private boolean supportEqual = false;
-    private boolean supportCondenced = false;
+    private char joinedChar = '\0';
+    private char condensedChar = '\0';
 
+    /**
+     * Define a new parameter
+     *
+     * @param arg The name of the parameter
+     * @param result A build-in parameter handler, which directly stores the
+     * value to the desired variable.
+     * @return Self reference
+     */
     public Args def(String arg, BaseArg<?> result) {
         return def(arg, result::set, result instanceof TransitiveArg, result instanceof MultiArg);
     }
 
+    /**
+     * Define a new parameter
+     *
+     * @param arg The name of the parameter
+     * @param result A general purpose handler for the specific parameter. The
+     * value of the parameter will be brought as an argument back here. Note
+     * this is a transitive parameter, i.e. a value after this parameter will
+     * always be required.
+     * @return Self reference
+     */
     public Args def(String arg, ArgResult result) {
         return def(arg, result == null ? t -> {
         } : result, true, false);
     }
 
+    /**
+     * Define a new parameter
+     *
+     * @param arg The name of the parameter
+     * @param found A general purpose non transitive handler for the specific
+     * parameter. Note that no parameter value will be required, thus no input
+     * value will be provided.
+     * @return Self reference
+     */
     public Args def(String arg, Runnable found) {
         return def(arg, t -> {
             if (found != null)
@@ -63,6 +90,12 @@ public class Args {
         }, false, false);
     }
 
+    /**
+     * Define a default help parameter
+     *
+     * @param helpargs List of parameters that will be used as help parameters
+     * @return Self reference
+     */
     public Args defhelp(String... helpargs) {
         for (String arg : helpargs)
             defs.put(checkNotExists(arg), HELP);
@@ -80,6 +113,13 @@ public class Args {
         return this;
     }
 
+    /**
+     * Define a new alias for a command
+     *
+     * @param source The original parameter reference
+     * @param dest The new parameter
+     * @return Self reference
+     */
     public Args alias(String source, String dest) {
         source = checkExist(source);
         dest = checkNotExists(dest);
@@ -87,10 +127,28 @@ public class Args {
         return this;
     }
 
+    /**
+     * Provide information about a parameter
+     *
+     * @param arg The name of the parameter
+     * @param info The information to display for this parameter
+     * @return Self reference
+     */
     public Args info(String arg, String info) {
         return info(arg, info, null);
     }
 
+    /**
+     * Provide information about a parameter. This method has meaning only for
+     * transitive parameters.
+     *
+     * @param arg The name of the parameter
+     * @param info The information to display for this parameter
+     * @param argumentName The name of the value, as displayed in help messages.
+     * By default the name is upper-case the name of the longest parameter
+     * itself, or ARG, if the name is too small.
+     * @return Self reference
+     */
     public Args info(String arg, String info, String argumentName) {
         arg = checkExist(arg);
         ArgResult ares = defs.get(arg);
@@ -110,32 +168,82 @@ public class Args {
         return this;
     }
 
+    /**
+     * Define a dependency for this parameter
+     *
+     * @param dependant The name of the dependant parameter
+     * @param dependencies The list of dependencies of this dependant parameter
+     * @return Self reference
+     */
     public Args dep(String dependant, String... dependencies) {
         dependant = checkExist(dependant);
         depends.put(defs.get(dependant), sets(dependencies, 1, "dependency"));
         return this;
     }
 
+    /**
+     * Define a list of parameters as required.
+     *
+     * @param req The list of required parameters. This list could contain even
+     * only one parameter. If a required parameter could not be provided due to
+     * dependencies, then this parameter is not counted as a required parameter.
+     * This is to help complex dependencies and requirements, when one parameter
+     * is required only under specific conditions.
+     * @return Self reference
+     */
     public Args req(String... req) {
         required.add(sets(req, 1, "requirement"));
         return this;
     }
 
+    /**
+     * List of parameters that could be empty. By default if a transitive
+     * parameter is provided with an empty value, "", then this value will be
+     * ignored and an error will be thrown. When called a parameter nullable,
+     * the behavior is changed and could carry an empty parameter.
+     *
+     * @param nullable List of nullable parameters
+     * @return Self reference
+     */
     public Args nullable(String... nullable) {
         this.nullable.addAll(sets(nullable, 1, "nullable parameters"));
         return this;
     }
 
+    /**
+     * Only one of the items in this list could be used simultaneously.
+     *
+     * @param uniq A list of unique parameters. SHould be at least two.
+     * @return Self reference
+     */
     public Args uniq(String... uniq) {
         unique.add(sets(uniq, 2, "uniquement"));
         return this;
     }
 
-    public Args multi(String multi) {
-        this.multi.add(defs.get(checkExist(multi)));
+    /**
+     * List of parameters that could be used more than once. By default a
+     * parameter could be used at most once, and an error is thrown if it is
+     * used more than once. With this option the defined parameters are allowed
+     * to be called more than once.
+     *
+     * @param multi List of parameters that could be called more than once.
+     * @return
+     */
+    public Args multi(String... multi) {
+        this.multi.addAll(sets(multi, 1, "multi parameters"));
         return this;
     }
 
+    /**
+     * Define a group of parameters. This is for presentation usage only. When
+     * displaying help text, instead of stacking all parameters under the Usage
+     * section, more than one sections (groups) could be defined.
+     *
+     * @param groupname The name of the group.
+     * @param items The list of the grouped parameters.
+     * @return Self reference
+     */
     public Args group(String groupname, String... items) {
         if (groupname == null)
             groupname = "";
@@ -146,22 +254,61 @@ public class Args {
         return this;
     }
 
-    public Args setCondenced(boolean supportCondenced) {
-        this.supportCondenced = supportCondenced;
-        return this;
-    }
-
-    public Args setEqualSign(boolean supportEqual) {
-        this.supportEqual = supportEqual;
+    /**
+     * Turn on condensed mode. By default all parameters are exactly one word
+     * and they are always separated by spaces. With condensed mode, single
+     * letter parameters, that are prefixed with the condensed parameters, could
+     * be grouped together with no space between them. Transitive parameters
+     * will use the next available argument as input. If more than one
+     * transitive parameters are groped, then the corresponding parameters that
+     * follow will be used as input.
+     * <br/>
+     * As an example, let's say {@code -b} is a valid non transient parameter
+     * and {@code -s} is a valid transient parameter, with the minus sign as the
+     * condensed character. Then this is a valid sequence of parameters:
+     * {@code -bbsbsb hello world} , which practically could be understood as
+     * this series of parameters: {@code -b -b -s hello -b -s world -b}
+     *
+     * @param condensedChar The condensed prefix character, usually the minus
+     * sign, '-'
+     * @return Self reference
+     */
+    public Args setCondensed(char condensedChar) {
+        this.condensedChar = condensedChar;
         return this;
     }
 
     /**
-     * usage
+     * Turn on joined notation. By default transitive parameters are separated
+     * by space with their corresponding value. By turning on joined notation,
+     * then a transient parameter is allowed to accept its value just after the
+     * joined character, i.e. the parameter and its value is separated by one
+     * instance of the joined parameter.
+     * <br/>
+     * For instance, if the equal sign is the joined character and a valid
+     * parameter {@code --param} exists, then the expression
+     * {@code --param value} could be also written as {@code --param=value}
      *
-     * @param args This is the only situation that an argument might not be
-     * valid
-     * @return self
+     * @param joinedChar The joined character, usually an equal sign '='
+     * @return Self reference
+     */
+    public Args setJoined(char joinedChar) {
+        this.joinedChar = joinedChar;
+        return this;
+    }
+
+    /**
+     * Define a new application usage.
+     *
+     * @param args List of parameters to display usage. Note that here no
+     * parameter validation is strictly performed. Although parameters are
+     * recognized and handled accordingly, any kind of text could be used.
+     * <br/>
+     * It is a common practice to start with the name of the application, and
+     * also display any free arguments whenever feels appropriate. Moreover, if
+     * unique parameters are displayed side by side, then the OR symbol '|' will
+     * be used between them, instead of the usual space.
+     * @return Self reference
      */
     public Args usage(String... args) {
         if (args == null || args.length == 0)
@@ -179,12 +326,26 @@ public class Args {
         return this;
     }
 
+    /**
+     * Error callback. By default the system throws an error. By using a custom
+     * callback we can override this behavior.
+     *
+     * @param error The callback to use
+     * @return Self reference
+     */
     public Args error(ArgResult error) {
         this.error = error == null ? t -> {
         } : error;
         return this;
     }
 
+    /**
+     * Parse command line arguments.
+     *
+     * @param args The given command line arguments
+     * @return A list of arguments not belonging to any defined argument, i.e.
+     * free arguments.
+     */
     public List<String> parse(String... args) {
         List<String> rest = new ArrayList<>();
         Set<ArgResult> found = new LinkedHashSet<>();
@@ -298,9 +459,9 @@ public class Args {
                 out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
         }
 
-        if (supportCondenced) {
+        if (condensedChar != '\0') {
         }
-        if (supportEqual) {
+        if (joinedChar != '\0') {
         }
 
         return out.toString();
@@ -310,18 +471,20 @@ public class Args {
         List<String> source = args == null ? Collections.EMPTY_LIST : Arrays.asList(args);
         Collection<String> argname = defs.keySet();
         Collection<String> trans = getArgsValues(this.transitive);
-        if (supportEqual) {
+        if (joinedChar != '\0') {
             int eq = 0;
             List<String> result = new ArrayList<>();
             for (String item : source)
-                if (item.startsWith("-") && (eq = item.indexOf("=")) > 0 && argname.contains(item.substring(0, eq))) {
+                if ((eq = item.indexOf(joinedChar)) > 0
+                        && argname.contains(item.substring(0, eq))
+                        && transitive.contains(defs.get(item.substring(0, eq)))) {
                     result.add(item.substring(0, eq));
                     result.add(item.length() > (eq + 1) ? item.substring(eq + 1) : "");
                 } else
                     result.add(item);
             source = result;
         }
-        if (supportCondenced) {
+        if (condensedChar != '\0') {
             List<String> result = new ArrayList<>();
             ListIterator<String> it = source.listIterator();
             while (it.hasNext()) {
@@ -329,9 +492,9 @@ public class Args {
                 Collection<String> vals = new ArrayList<>();
                 boolean correct = true;
                 int rollback = 0;
-                if (item.startsWith("-") && item.length() > 1 && item.charAt(1) != '-')
+                if (item.length() > 2 && item.charAt(0) == condensedChar && item.charAt(1) != condensedChar)
                     for (char argC : item.substring(1).toCharArray()) {
-                        String arg = "-" + argC;
+                        String arg = condensedChar + "" + argC;
                         if (!argname.contains(arg)) {
                             correct = false;
                             break;
