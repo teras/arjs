@@ -3,16 +3,12 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.panayotis.argparse;
+package com.panayotis.arjs;
 
 /**
  *
  * @author teras
  */
-public class ArgumentException extends RuntimeException {
-
-    public ArgumentException(String message) {
-        super(message);
-    }
-
+public interface MultiArg {
+    
 }

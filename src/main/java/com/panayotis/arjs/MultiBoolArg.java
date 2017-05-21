@@ -3,21 +3,21 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.panayotis.argparse;
+package com.panayotis.arjs;
 
 /**
  *
  * @author teras
  */
-public class BoolArg extends BaseArg<Boolean> {
+public class MultiBoolArg extends BaseArg<Integer> implements MultiArg {
 
-    public BoolArg() {
-        super(Boolean.FALSE);
+    public MultiBoolArg() {
+        super(0);
     }
 
     @Override
     protected void set(String val) {
-        set(Boolean.TRUE);
+        set(get() + 1);
     }
 
 }

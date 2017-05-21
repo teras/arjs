@@ -4,7 +4,6 @@
     <groupId>com.panayotis</groupId>
     <version>0.1</version>
     <artifactId>arjs</artifactId>
-    <packaging>jar</packaging>
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
