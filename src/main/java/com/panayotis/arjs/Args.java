@@ -432,11 +432,11 @@ public class Args {
     }
 
     private Set<ArgResult> sets(String[] args, int minimum, String type) {
+        if (args == null || args.length < minimum)
+            throw new ArgumentException("Too few arguments are defined for " + type);
         Set<ArgResult> items = new LinkedHashSet<>();
         for (String each : args)
             items.add(defs.get(checkExist(each)));
-        if (items.size() < minimum)
-            throw new ArgumentException("Too few arguments are defined for " + type);
         return items;
     }
 
