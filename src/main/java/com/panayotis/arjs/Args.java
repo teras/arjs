@@ -9,8 +9,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -33,14 +31,14 @@ public class Args {
     };
 
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
-    private final Map<ArgResult, String> info = new HashMap<>();
-    private final Map<ArgResult, String> infoname = new HashMap<>();
-    private final Set<ArgResult> transitive = new HashSet<>();
-    private final Set<ArgResult> multi = new HashSet<>();
-    private final Map<ArgResult, Set<ArgResult>> depends = new HashMap<>();
+    private final Map<ArgResult, String> info = new LinkedHashMap<>();
+    private final Map<ArgResult, String> infoname = new LinkedHashMap<>();
+    private final Set<ArgResult> transitive = new LinkedHashSet<>();
+    private final Set<ArgResult> multi = new LinkedHashSet<>();
+    private final Map<ArgResult, Set<ArgResult>> depends = new LinkedHashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
-    private final Set<ArgResult> nullable = new HashSet<>();
+    private final Set<ArgResult> nullable = new LinkedHashSet<>();
     private final Map<String, Set<ArgResult>> groups = new LinkedHashMap<>();
     private final List<List<String>> usages = new ArrayList<>();
     private ArgResult error = err -> {
@@ -68,7 +66,7 @@ public class Args {
     public Args defhelp(String... helpargs) {
         for (String arg : helpargs)
             defs.put(checkNotExists(arg), HELP);
-        info.put(HELP, "application usage, this text");
+        info.put(HELP, "application usage, this text.");
         return this;
     }
 
@@ -189,7 +187,7 @@ public class Args {
 
     public List<String> parse(String... args) {
         List<String> rest = new ArrayList<>();
-        Set<ArgResult> found = new HashSet<>();
+        Set<ArgResult> found = new LinkedHashSet<>();
         Iterator<String> iterator = canonicalArgs(args);
         while (iterator.hasNext()) {
             String arg = iterator.next();
@@ -273,8 +271,25 @@ public class Args {
 
         if (!depends.isEmpty()) {
             out.append(NL);
-            for (ArgResult m : depends.keySet())
-                out.append("Argument ").append(getArg(m)).append(" depends on the pre-existence of argument").append(getArgsWithPlural(depends.get(m))).append(".").append(NL);
+            Map<Set<ArgResult>, Collection<ArgResult>> depmap = new LinkedHashMap<>();    // dependencies, dependents
+            for (ArgResult m : depends.keySet()) {
+                // Reconstruct multiple dependencies into groups of the same type
+                Set<ArgResult> dependencies = depends.get(m);
+                Collection<ArgResult> items = depmap.get(dependencies);
+                if (items == null) {
+                    items = new LinkedHashSet<>();
+                    depmap.put(dependencies, items);
+                }
+                items.add(m);
+            }
+            for (Set<ArgResult> dependecies : depmap.keySet()) {
+                Collection<ArgResult> dependents = depmap.get(dependecies);
+                if (dependents.size() == 1)
+                    out.append("Argument ").append(getArg(dependents.iterator().next()));
+                else
+                    out.append("Each one of arguments ").append(getArgs(dependents));
+                out.append(" depends on the pre-existence of argument").append(getArgsWithPlural(dependecies)).append(".").append(NL);
+            }
         }
 
         if (!multi.isEmpty()) {
@@ -401,7 +416,7 @@ public class Args {
         for (List<String> usage : usages) {
             StringBuilder line = new StringBuilder();
             List<ArgResult> trackUnique = new ArrayList<>();
-            Set<ArgResult> upToNow = new HashSet<>();
+            Set<ArgResult> upToNow = new LinkedHashSet<>();
             for (String arg : usage) {
                 ArgResult res = defs.get(arg);
                 if (res == null) {
