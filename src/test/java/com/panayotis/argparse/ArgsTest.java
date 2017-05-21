@@ -22,6 +22,48 @@ public class ArgsTest {
     public ArgsTest() {
     }
 
+    @Test
+    public void testArgs() {
+        BoolArg bool = new BoolArg();
+        StringArg string = new StringArg();
+        StringArg defstring = new StringArg("hey");
+        MultiBoolArg mbool = new MultiBoolArg();
+        MultiStringArg mstring = new MultiStringArg();
+        MultiStringArg mdefstring = new MultiStringArg("hello", "hi");
+
+        Args args = new Args();
+        args.
+                def("-b", bool).
+                def("-s", string).
+                def("-d", defstring).
+                def("-B", mbool).
+                def("-S", mstring).
+                def("-D", mdefstring);
+
+        args.parse("something", "else");
+        assertFalse("Default boolean should be false", bool.get());
+        assertTrue("Default String should be null", string.get() == null);
+        assertEquals("Default String with default,", "hey", defstring.get());
+        assertEquals("Default multi bool,", (Integer) 0, mbool.get());
+        assertTrue("Default multi String should be empty", mstring.get().isEmpty());
+        assertTrue("Default multi String with default should contain 'hello' and 'hi'", mdefstring.get().size() == 2 && mdefstring.get().contains("hello") && mdefstring.get().contains("hi"));
+
+        args.parse("something", "-b", "else", "-B", "-B", "-s", "one", "-d", "two", "-S", "S1", "-S", "S2", "-D", "D1");
+        assertTrue("Boolean value defined and should be true", bool.get());
+        assertEquals("Multi bool value appeared twice,", (Integer) 2, mbool.get());
+        assertEquals("String argument,", "one", string.get());
+        assertEquals("Default string argument,", "two", defstring.get());
+        assertEquals("Multy String size,", 2, mstring.get().size());
+        assertEquals("Default multy String size,", 3, mdefstring.get().size());
+
+        args.parse("-B", "-s", "three", "-S", "S3", "-S", "S4", "-D", "D2", "-D", "D3");
+        assertEquals("String argument,", "three", string.get());
+        assertEquals("Multy String size,", 4, mstring.get().size());
+        assertEquals("Default multy String size,", 5, mdefstring.get().size());
+        assertEquals("Multi String contents", "[S1, S2, S3, S4]", mstring.get().toString());
+        assertEquals("Default multi String contents", "[hello, hi, D1, D2, D3]", mdefstring.get().toString());
+    }
+
     /**
      * Test of parse method, of class Args.
      */
