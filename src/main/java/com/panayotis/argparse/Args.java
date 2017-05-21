@@ -50,19 +50,19 @@ public class Args {
     private boolean supportCondenced = false;
 
     public Args def(String arg, BaseArg<?> result) {
-        return def(arg, result::set, result.isTransitive());
+        return def(arg, result::set, result instanceof TransitiveArg, result instanceof MultiArg);
     }
 
     public Args def(String arg, ArgResult result) {
         return def(arg, result == null ? t -> {
-        } : result, true);
+        } : result, true, false);
     }
 
     public Args def(String arg, Runnable found) {
         return def(arg, t -> {
             if (found != null)
                 found.run();
-        }, false);
+        }, false, false);
     }
 
     public Args defhelp(String... helpargs) {
@@ -72,10 +72,12 @@ public class Args {
         return this;
     }
 
-    private Args def(String arg, ArgResult result, boolean isTransitive) {
+    private Args def(String arg, ArgResult result, boolean isTransitive, boolean isMultiArg) {
         arg = checkNotExists(arg);
         if (isTransitive)
             transitive.add(result);
+        if (isMultiArg)
+            multi.add(result);
         defs.put(arg, result);
         return this;
     }

@@ -52,8 +52,6 @@ public abstract class BaseArg<T> {
         return true;
     }
 
-    protected abstract boolean isTransitive();
-
     protected abstract void set(String val);
 
 }

@@ -9,15 +9,6 @@ package com.panayotis.argparse;
  *
  * @author teras
  */
-public class BoolArg extends BaseArg<Boolean> {
-
-    public BoolArg() {
-        super(Boolean.FALSE);
-    }
-
-    @Override
-    protected void set(String val) {
-        set(Boolean.TRUE);
-    }
-
+public interface MultiArg {
+    
 }

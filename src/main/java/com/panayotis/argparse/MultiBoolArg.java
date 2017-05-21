@@ -9,19 +9,15 @@ package com.panayotis.argparse;
  *
  * @author teras
  */
-public class StringArg extends BaseArg<String> implements TransitiveArg {
+public class MultiBoolArg extends BaseArg<Integer> implements MultiArg {
 
-    public StringArg() {
-        this(null);
-    }
-
-    public StringArg(String val) {
-        super(val);
+    public MultiBoolArg() {
+        super(0);
     }
 
     @Override
     protected void set(String val) {
-        super.set(val);
+        set(get() + 1);
     }
 
 }
