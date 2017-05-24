@@ -5,6 +5,8 @@
  */
 package com.panayotis.arjs;
 
+import static com.panayotis.arjs.TextUtils.spaces;
+import com.panayotis.jerminal.Jerminal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -25,8 +27,10 @@ public class Args {
 
     private final static String NL = System.getProperty("line.separator", "\n");
     private final static String INSET = "  ";
+    private static final int LINELENGTH = Jerminal.getWidth();
+
     private final ArgResult HELP = t -> {
-        System.out.print(toString());
+        System.err.print(toString());
         System.exit(0);
     };
 
@@ -412,7 +416,7 @@ public class Args {
 
         if (!usages.isEmpty()) {
             out.append("Usage:").append(NL);
-            out.append(usages());
+            usages(out);
             out.append(NL);
         }
 
@@ -421,13 +425,13 @@ public class Args {
         if (!required.isEmpty()) {
             out.append(NL);
             for (Set<ArgResult> set : required)
-                out.append(set.size() == 1 ? "Argument" : "One of the argument").append(getArgsWithPlural(set)).append(" is required.").append(NL);
+                print(out, (set.size() == 1 ? "Argument" : "One of the argument") + getArgsWithPlural(set) + " is required.");
         }
 
         if (!unique.isEmpty()) {
             out.append(NL);
             for (Set<ArgResult> set : unique)
-                out.append("Only one of argument").append(getArgsWithPlural(set)).append(" could be used simultaneously; they are mutually exclusive.").append(NL);
+                print(out, "Only one of argument" + getArgsWithPlural(set) + " could be used simultaneously; they are mutually exclusive.");
         }
 
         if (!depends.isEmpty()) {
@@ -445,18 +449,17 @@ public class Args {
             }
             for (Set<ArgResult> dependecies : depmap.keySet()) {
                 Collection<ArgResult> dependents = depmap.get(dependecies);
-                if (dependents.size() == 1)
-                    out.append("Argument ").append(getArg(dependents.iterator().next()));
-                else
-                    out.append("Each one of arguments ").append(getArgs(dependents));
-                out.append(" depends on the pre-existence of argument").append(getArgsWithPlural(dependecies)).append(".").append(NL);
+                print(out, (dependents.size() == 1
+                        ? "Argument " + getArg(dependents.iterator().next())
+                        : "Each one of arguments " + getArgs(dependents))
+                        + " depends on the pre-existence of argument" + getArgsWithPlural(dependecies) + ".");
             }
         }
 
         if (!multi.isEmpty()) {
             out.append(NL);
             for (ArgResult m : multi)
-                out.append("Argument ").append(getArg(m)).append(" can be used more than once.").append(NL);
+                print(out, "Argument " + getArg(m) + " can be used more than once.");
         }
 
         if (condensedChar != '\0') {
@@ -477,22 +480,35 @@ public class Args {
                 }
             if (single.size() > 1) {    // Parameters permit it
                 out.append(NL);
-                out.append("Single letter arguments that start with the character `").append(condensedChar).
-                        append("` could be grouped together. For example the '");
-                out.append(condensedChar).append(single.get(0)).append(trans.get(0)).append(" ").append(condensedChar).append(single.get(1)).append(trans.get(1));
-                out.append("' arguments could be written as '");
-                out.append(condensedChar).append(single.get(0)).append(single.get(1)).append(trans.get(0)).append(trans.get(1)).append("'.").append(NL);
+                print(out, "Single letter arguments that start with the character `" + condensedChar
+                        + "` could be grouped together. For example the '" + condensedChar
+                        + single.get(0) + trans.get(0) + " " + condensedChar + single.get(1) + trans.get(1)
+                        + "' arguments could be written as '" + condensedChar
+                        + single.get(0) + single.get(1) + trans.get(0) + trans.get(1) + "'.");
             }
         }
 
         if (joinedChar != '\0' && !transitive.isEmpty()) {
             out.append(NL);
             String param = getArg(transitive.iterator().next());
-            out.append("Arguments with values are allowed to use the `").append(joinedChar).append("` character to assign their value. For example the '").
-                    append(param).append(" ARG1' argument could be written as '").append(param).append(joinedChar).append("ARG'.");
+            print(out, "Arguments with values are allowed to use the `" + joinedChar
+                    + "` character to assign their value. For example the '" + param
+                    + " ARG1' argument could be written as '" + param + joinedChar + "ARG'.");
         }
 
         return out.toString();
+    }
+
+    private void print(StringBuilder out, String message) {
+        print(out, message, "", "");
+    }
+
+    private void print(StringBuilder out, String message, String firstInset, String allInsets) {
+        String inset = firstInset;
+        for (String s : TextUtils.split(message, false, LINELENGTH - firstInset.length(), LINELENGTH - allInsets.length())) {
+            out.append(inset).append(s).append(NL);
+            inset = allInsets;
+        }
     }
 
     private Iterator<String> canonicalArgs(String[] args) {
@@ -571,10 +587,11 @@ public class Args {
             max = Math.max(max, singleGroupCalc(missing, lefts, rights));
         }
         max++;
+        String secondLineInset = spaces(max + 4);
         for (int i = 0; i < names.size(); i++) {
             if (i != 0)
                 out.append(NL);
-            singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, out);
+            singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, secondLineInset, out);
         }
     }
 
@@ -588,21 +605,21 @@ public class Args {
             String left = getArgWithParam(arg, true);
             leftPart.add(left);
             String right = info.get(arg);
-            rightPart.add(right == null ? "" : ": " + right);
+            rightPart.add(right == null ? "" : right);
             maxsize = Math.max(maxsize, left.length());
         }
         return maxsize;
     }
 
-    private void singleGroupPrint(String title, List<String> leftPart, List<String> rightPart, int maxsize, StringBuilder out) {
-        out.append(title).append(":").append(NL);
-        for (int i = 0; i < leftPart.size(); i++)
-            out.append(INSET).append(leftPart.get(i)).append(spaces(maxsize - leftPart.get(i).length())).
-                    append(rightPart.get(i)).append(NL);
+    private void singleGroupPrint(String title, List<String> leftPart, List<String> rightPart, int maxsize, String secondLineInset, StringBuilder out) {
+        print(out, title + ":", "", "");
+        for (int i = 0; i < leftPart.size(); i++) {
+            String left = INSET + leftPart.get(i) + spaces(maxsize - leftPart.get(i).length()) + (rightPart.get(i).isEmpty() ? "" : ": ");
+            print(out, rightPart.get(i), left, secondLineInset);
+        }
     }
 
-    private String usages() {
-        StringBuilder out = new StringBuilder();
+    private void usages(StringBuilder out) {
         Collection<ArgResult> wrongParams = new LinkedHashSet<>();
         for (List<String> usage : usages) {
             StringBuilder line = new StringBuilder();
@@ -629,12 +646,13 @@ public class Args {
                             append(req ? "" : "]").append(missing ? "^" : "");
                 }
             }
-            out.append(INSET).append(line.substring(1)).append(NL);
+            print(out, line.substring(1), INSET, "");
         }
-        if (!wrongParams.isEmpty())
-            out.append("Notes:").append(NL).append(INSET).append("^some pre-required arguments of the argument").
-                    append(getArgsWithPlural(wrongParams)).append(" have been hidden for clarity").append(NL);
-        return out.toString();
+        if (!wrongParams.isEmpty()) {
+            out.append("Notes:").append(NL);
+            print(out, "^some pre-required arguments of the argument" + getArgsWithPlural(wrongParams) + " have been hidden for clarity",
+                    INSET, "");
+        }
     }
 
     private Set<ArgResult> sets(String[] args, int minimum, String type) {
@@ -765,12 +783,6 @@ public class Args {
         out.append(" ");
         out.append(getArgs(list));
         return out.toString();
-    }
-
-    private String spaces(int i) {
-        char[] chars = new char[i];
-        Arrays.fill(chars, ' ');
-        return new String(chars);
     }
 
 }
