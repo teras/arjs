@@ -232,7 +232,7 @@ public class Args {
      * to be called more than once.
      *
      * @param multi List of parameters that could be called more than once.
-     * @return
+     * @return Self reference
      */
     public Args multi(String... multi) {
         this.multi.addAll(sets(multi, 1, "multi parameters"));
@@ -266,7 +266,7 @@ public class Args {
      * will use the next available argument as input. If more than one
      * transitive parameters are groped, then the corresponding parameters that
      * follow will be used as input.
-     * <br/>
+     * <br>
      * As an example, let's say {@code -b} is a valid non transient parameter
      * and {@code -s} is a valid transient parameter, with the minus sign as the
      * condensed character. Then this is a valid sequence of parameters:
@@ -288,7 +288,7 @@ public class Args {
      * then a transient parameter is allowed to accept its value just after the
      * joined character, i.e. the parameter and its value is separated by one
      * instance of the joined parameter.
-     * <br/>
+     * <br>
      * For instance, if the equal sign is the joined character and a valid
      * parameter {@code --param} exists, then the expression
      * {@code --param value} could be also written as {@code --param=value}
@@ -307,7 +307,7 @@ public class Args {
      * @param args List of parameters to display usage. Note that here no
      * parameter validation is strictly performed. Although parameters are
      * recognized and handled accordingly, any kind of text could be used.
-     * <br/>
+     * <br>
      * It is a common practice to start with the name of the application, and
      * also display any free arguments whenever feels appropriate. Moreover, if
      * unique parameters are displayed side by side, then the OR symbol '|' will

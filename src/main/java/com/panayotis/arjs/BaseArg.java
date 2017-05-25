@@ -7,11 +7,6 @@ package com.panayotis.arjs;
 
 import java.util.Objects;
 
-/**
- *
- * @author teras
- * @param <T>
- */
 public abstract class BaseArg<T> {
 
     private T val;
