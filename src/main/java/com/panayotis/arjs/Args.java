@@ -408,17 +408,33 @@ public class Args {
         return false;   // All have missing requirements, so none could be used anyways
     }
 
+    public String getUsage() {
+        StringBuilder out = new StringBuilder();
+        getUsage(out, false);
+        if (out.length() > 0) {
+            String helparg = getArg(HELP);
+            if (!helparg.isEmpty())
+                print(out, "For a detailed description of all parameters, please invoke the application with the " + helparg + " parameter.");
+        }
+        return out.toString();
+    }
+
+    private void getUsage(StringBuilder out, boolean asPart) {
+        if (!usages.isEmpty()) {
+            out.append("Usage:").append(NL);
+            usages(out);
+            if (asPart)
+                out.append(NL);
+        }
+    }
+
     @Override
     public String toString() {
         if (defs.isEmpty())
             return "[No arguments defined]" + NL;
         StringBuilder out = new StringBuilder();
 
-        if (!usages.isEmpty()) {
-            out.append("Usage:").append(NL);
-            usages(out);
-            out.append(NL);
-        }
+        getUsage(out, true);
 
         groupArgs(new LinkedHashSet<>(defs.values()), out);
 
@@ -736,7 +752,7 @@ public class Args {
                 }
                 name.append("|").append(arg);
             }
-        return name.substring(1);
+        return name.length() > 0 ? name.substring(1) : "";
     }
 
     private String getArgs(Collection<ArgResult> col) {
