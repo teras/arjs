@@ -29,9 +29,7 @@ public class Args {
     private final static String INSET = "  ";
     private static final int LINELENGTH = Jerminal.getWidth();
 
-    private final ArgResult HELP = t -> {
-        System.err.print(toString());
-        System.exit(0);
+    private final ArgResult HELP = h -> {
     };
 
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
@@ -103,7 +101,7 @@ public class Args {
     public Args defhelp(String... helpargs) {
         for (String arg : helpargs)
             defs.put(checkNotExists(arg), HELP);
-        info.put(HELP, "application usage, this text.");
+        info.put(HELP, "application usage, this text. Help can be provided on a group-based manner, by giving first the parameter characterized by this group and then the help argument.");
         return this;
     }
 
@@ -245,7 +243,8 @@ public class Args {
      * section, more than one sections (groups) could be defined.
      *
      * @param groupname The name of the group.
-     * @param items The list of the grouped parameters.
+     * @param items The list of the grouped parameters. At least one parameter
+     * is needed.
      * @return Self reference
      */
     public Args group(String groupname, String... items) {
@@ -343,6 +342,34 @@ public class Args {
         return this;
     }
 
+    private String getHelpText(Collection<ArgResult> found, Collection<String> rest) {
+        String helpText = "";
+        switch (found.size() + rest.size()) {
+            case 0:
+                helpText = toString();
+                break;
+            case 1:
+                if (!rest.isEmpty())
+                    error.result("Unable to provide help on free parameter '" + rest.iterator().next() + "'");
+                else {
+                    ArgResult grouptag = found.iterator().next();
+                    Collection<String> helpargtex = getArgValues(Arrays.asList(grouptag));
+                    StringBuilder found_usage = new StringBuilder();
+                    StringBuilder found_groups = new StringBuilder();
+                    getUsage(found_usage, helpargtex);
+                    groupArgs(found_groups, grouptag);
+                    helpText = found_usage.toString() + (found_usage.length() > 0 && found_groups.length() > 0 ? NL : "") + found_groups.toString();
+                    if (helpText.isEmpty())
+                        error.result("Unable to find help for argument " + getArg(grouptag));
+                }
+                break;
+            default:
+                error.result("Help request is available only on a single argument");
+                break;
+        }
+        return helpText;
+    }
+
     /**
      * Parse command line arguments.
      *
@@ -354,10 +381,15 @@ public class Args {
         List<String> rest = new ArrayList<>();
         Set<ArgResult> found = new LinkedHashSet<>();
         Iterator<String> iterator = canonicalArgs(args);
+        String helpText = null;
         while (iterator.hasNext()) {
             String arg = iterator.next();
             ArgResult cons = defs.get(arg);
-            if (cons != null) {
+            if (helpText != null)
+                error.result("No arguments should appear after help request");
+            else if (cons == HELP)
+                helpText = getHelpText(found, rest);
+            else if (cons != null) {
                 Set<ArgResult> reqDeps = depends.get(cons);
                 if (reqDeps != null && !containsAny(reqDeps, found))
                     error.result("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps));
@@ -378,6 +410,10 @@ public class Args {
                 cons.result(arg);
             } else
                 rest.add(arg);
+        }
+        if (helpText != null) {
+            System.err.print(helpText);
+            System.exit(0);
         }
         // Check Required
         for (Set<ArgResult> group : required)
@@ -410,7 +446,7 @@ public class Args {
 
     public String getUsage() {
         StringBuilder out = new StringBuilder();
-        getUsage(out, false);
+        getUsage(out, null);
         if (out.length() > 0) {
             String helparg = getArg(HELP);
             if (!helparg.isEmpty())
@@ -419,13 +455,15 @@ public class Args {
         return out.toString();
     }
 
-    private void getUsage(StringBuilder out, boolean asPart) {
-        if (!usages.isEmpty()) {
+    private boolean getUsage(StringBuilder out, Collection<String> filter) {
+        StringBuilder uout = new StringBuilder();
+        usages(uout, filter);
+        if (uout.length() > 0) {
             out.append("Usage:").append(NL);
-            usages(out);
-            if (asPart)
-                out.append(NL);
+            out.append(uout.toString());
+            return true;
         }
+        return false;
     }
 
     @Override
@@ -434,9 +472,10 @@ public class Args {
             return "[No arguments defined]" + NL;
         StringBuilder out = new StringBuilder();
 
-        getUsage(out, true);
+        if (getUsage(out, null))
+            out.append(NL);
 
-        groupArgs(new LinkedHashSet<>(defs.values()), out);
+        groupArgs(out, null);
 
         if (!required.isEmpty()) {
             out.append(NL);
@@ -530,9 +569,9 @@ public class Args {
     private Iterator<String> canonicalArgs(String[] args) {
         List<String> source = args == null ? Collections.EMPTY_LIST : Arrays.asList(args);
         Collection<String> argname = defs.keySet();
-        Collection<String> trans = getArgsValues(this.transitive);
+        Collection<String> trans = getArgValues(this.transitive);
         if (joinedChar != '\0') {
-            int eq = 0;
+            int eq;
             List<String> result = new ArrayList<>();
             for (String item : source)
                 if ((eq = item.indexOf(joinedChar)) > 0
@@ -583,24 +622,32 @@ public class Args {
         return source.iterator();
     }
 
-    private void groupArgs(Set<ArgResult> args, StringBuilder out) {
+    private boolean groupArgs(StringBuilder out, ArgResult filter) {
+        Set<ArgResult> args = new LinkedHashSet<>(defs.values());
+
         List<List<String>> lefts = new ArrayList<>();
         List<List<String>> rights = new ArrayList<>();
         List<String> names = new ArrayList<>();
         int max = 0;
         if (groups.isEmpty()) {
-            names.add("Arguments");
-            max = singleGroupCalc(args, lefts, rights);
+            if (filter == null) {   // Only when no filter is applied
+                names.add("Arguments");
+                max = singleGroupCalc(args, lefts, rights);
+            }
         } else {
             Set<ArgResult> missing = new LinkedHashSet<>(defs.values());
             for (String name : groups.keySet()) {
                 Set<ArgResult> groupItems = groups.get(name);
                 missing.removeAll(groupItems);
-                names.add(name);
-                max = Math.max(max, singleGroupCalc(groupItems, lefts, rights));
+                if (filter == null || groupItems.contains(filter)) {
+                    names.add(name);
+                    max = Math.max(max, singleGroupCalc(groupItems, lefts, rights));
+                }
             }
-            names.add("Generic arguments");
-            max = Math.max(max, singleGroupCalc(missing, lefts, rights));
+            if (filter == null || !names.isEmpty()) {
+                names.add("Generic arguments");
+                max = Math.max(max, singleGroupCalc(missing, lefts, rights));
+            }
         }
         max++;
         String secondLineInset = spaces(max + 4);
@@ -609,6 +656,7 @@ public class Args {
                 out.append(NL);
             singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, secondLineInset, out);
         }
+        return !names.isEmpty();
     }
 
     private int singleGroupCalc(Set<ArgResult> args, List<List<String>> lefts, List<List<String>> rights) {
@@ -635,35 +683,36 @@ public class Args {
         }
     }
 
-    private void usages(StringBuilder out) {
+    private void usages(StringBuilder out, Collection<String> filter) {
         Collection<ArgResult> wrongParams = new LinkedHashSet<>();
-        for (List<String> usage : usages) {
-            StringBuilder line = new StringBuilder();
-            List<ArgResult> trackUnique = new ArrayList<>();
-            Set<ArgResult> upToNow = new LinkedHashSet<>();
-            for (String arg : usage) {
-                ArgResult res = defs.get(arg);
-                if (res == null) {
-                    line.append(" ").append(arg);
-                    trackUnique.clear();
-                } else {
-                    trackUnique.add(res);
-                    if (trackUnique.size() > 2)
-                        trackUnique.remove(0);
+        for (List<String> usage : usages)
+            if (filter == null || !getCommon(usage, filter).isEmpty()) {
+                StringBuilder line = new StringBuilder();
+                List<ArgResult> trackUnique = new ArrayList<>();
+                Set<ArgResult> upToNow = new LinkedHashSet<>();
+                for (String arg : usage) {
+                    ArgResult res = defs.get(arg);
+                    if (res == null) {
+                        line.append(" ").append(arg);
+                        trackUnique.clear();
+                    } else {
+                        trackUnique.add(res);
+                        if (trackUnique.size() > 2)
+                            trackUnique.remove(0);
 
-                    Set<ArgResult> reqDeps = depends.get(res);
-                    boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
-                    if (missing)
-                        wrongParams.add(res);
-                    upToNow.add(res);
+                        Set<ArgResult> reqDeps = depends.get(res);
+                        boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
+                        if (missing)
+                            wrongParams.add(res);
+                        upToNow.add(res);
 
-                    boolean req = isInCollection(required, res);
-                    line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
-                            append(req ? "" : "]").append(missing ? "^" : "");
+                        boolean req = isInCollection(required, res);
+                        line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
+                                append(req ? "" : "]").append(missing ? "^" : "");
+                    }
                 }
+                print(out, line.substring(1), INSET, "");
             }
-            print(out, line.substring(1), INSET, "");
-        }
         if (!wrongParams.isEmpty()) {
             out.append("Notes:").append(NL);
             print(out, "^some pre-required arguments of the argument" + getArgsWithPlural(wrongParams) + " have been hidden for clarity",
@@ -784,7 +833,7 @@ public class Args {
         return getArg(arg, full) + " " + name;
     }
 
-    private Collection<String> getArgsValues(Collection<ArgResult> args) {
+    private Collection<String> getArgValues(Collection<ArgResult> args) {
         Collection<String> res = new LinkedHashSet<>();
         for (String arg : defs.keySet())
             if (args.contains(defs.get(arg)))
