@@ -19,8 +19,13 @@ public abstract class BaseArg<T> {
         return val;
     }
 
-    protected void set(T val) {
+    protected abstract boolean set(String val);
+
+    protected final boolean setVal(T val) {
+        if (val == null)
+            return false;
         this.val = val;
+        return true;
     }
 
     @Override
@@ -46,7 +51,5 @@ public abstract class BaseArg<T> {
             return false;
         return true;
     }
-
-    protected abstract void set(String val);
 
 }

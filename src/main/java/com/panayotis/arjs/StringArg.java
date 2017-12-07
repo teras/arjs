@@ -9,19 +9,14 @@ package com.panayotis.arjs;
  *
  * @author teras
  */
-public class StringArg extends BaseArg<String> implements TransitiveArg {
+public class StringArg extends TypedArg<String> {
 
     public StringArg() {
         this(null);
     }
 
     public StringArg(String val) {
-        super(val);
-    }
-
-    @Override
-    protected void set(String val) {
-        super.set(val);
+        super(t -> t, val);
     }
 
 }

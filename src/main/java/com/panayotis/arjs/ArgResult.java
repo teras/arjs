@@ -11,5 +11,8 @@ package com.panayotis.arjs;
  */
 public interface ArgResult {
 
+    /**
+     * @param value The input value
+     */
     public void result(String value);
 }

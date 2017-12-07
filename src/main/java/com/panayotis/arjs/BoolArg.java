@@ -12,12 +12,16 @@ package com.panayotis.arjs;
 public class BoolArg extends BaseArg<Boolean> {
 
     public BoolArg() {
-        super(Boolean.FALSE);
+        this(false);
+    }
+
+    public BoolArg(boolean status) {
+        super(status);
     }
 
     @Override
-    protected void set(String val) {
-        set(Boolean.TRUE);
+    protected boolean set(String val) {
+        return setVal(Boolean.TRUE);
     }
 
 }

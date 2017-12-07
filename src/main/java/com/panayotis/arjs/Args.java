@@ -407,7 +407,11 @@ public class Args {
                 }
                 if (!nullable.contains(cons) && arg.isEmpty())
                     error.result("Parameter " + getArg(cons) + " should not have an empty value");
-                cons.result(arg);
+                try {
+                    cons.result(arg);
+                } catch (Exception ex) {
+                    error.result("Invalid parameter '" + getArg(cons) + "' using value '" + arg + "': " + ex.getMessage());
+                }
             } else
                 rest.add(arg);
         }
@@ -707,8 +711,11 @@ public class Args {
                         upToNow.add(res);
 
                         boolean req = isInCollection(required, res);
+                        boolean morethanonce = multi.contains(res);
                         line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
-                                append(req ? "" : "]").append(missing ? "^" : "");
+                                append(req ? "" : "]").
+                                append(morethanonce ? "..." : "").
+                                append(missing ? "^" : "");
                     }
                 }
                 print(out, line.substring(1), INSET, "");

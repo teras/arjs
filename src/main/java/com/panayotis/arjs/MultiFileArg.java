@@ -5,19 +5,16 @@
  */
 package com.panayotis.arjs;
 
+import java.io.File;
+
 /**
  *
  * @author teras
  */
-public class MultiBoolArg extends BaseArg<Integer> implements MultiArg {
+public class MultiFileArg extends MultiTypedArg<File> {
 
-    public MultiBoolArg() {
-        super(0);
-    }
-
-    @Override
-    protected boolean set(String val) {
-        return setVal(get() + 1);
+    public MultiFileArg(File... val) {
+        super(t -> new File(t), val);
     }
 
 }
