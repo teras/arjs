@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import javax.annotation.Nonnull;
 
 /**
  *
@@ -57,8 +58,10 @@ public class Args {
      * value to the desired variable.
      * @return Self reference
      */
-    public Args def(String arg, BaseArg<?> result) {
-        return def(arg, result::set, result instanceof TransitiveArg, result instanceof MultiArg);
+    @Nonnull
+    public Args def(@Nonnull String arg, BaseArg<?> result) {
+        return def(arg, result == null ? t -> {
+        } : result::set, result instanceof TransitiveArg, result instanceof MultiArg);
     }
 
     /**
@@ -71,7 +74,8 @@ public class Args {
      * always be required.
      * @return Self reference
      */
-    public Args def(String arg, ArgResult result) {
+    @Nonnull
+    public Args def(@Nonnull String arg, ArgResult result) {
         return def(arg, result == null ? t -> {
         } : result, true, false);
     }
@@ -85,7 +89,8 @@ public class Args {
      * value will be provided.
      * @return Self reference
      */
-    public Args def(String arg, Runnable found) {
+    @Nonnull
+    public Args def(@Nonnull String arg, Runnable found) {
         return def(arg, t -> {
             if (found != null)
                 found.run();
@@ -98,7 +103,8 @@ public class Args {
      * @param helpargs List of parameters that will be used as help parameters
      * @return Self reference
      */
-    public Args defhelp(String... helpargs) {
+    @Nonnull
+    public Args defhelp(@Nonnull String... helpargs) {
         for (String arg : helpargs)
             defs.put(checkNotExists(arg), HELP);
         info.put(HELP, "application usage, this text. Help can be provided on a group-based manner, by giving first the parameter characterized by this group and then the help argument.");
@@ -122,7 +128,8 @@ public class Args {
      * @param dest The new parameter
      * @return Self reference
      */
-    public Args alias(String source, String dest) {
+    @Nonnull
+    public Args alias(@Nonnull String source, @Nonnull String dest) {
         source = checkExist(source);
         dest = checkNotExists(dest);
         defs.put(dest, defs.get(source));
@@ -136,7 +143,8 @@ public class Args {
      * @param info The information to display for this parameter
      * @return Self reference
      */
-    public Args info(String arg, String info) {
+    @Nonnull
+    public Args info(@Nonnull String arg, @Nonnull String info) {
         return info(arg, info, null);
     }
 
@@ -151,7 +159,8 @@ public class Args {
      * itself, or ARG, if the name is too small.
      * @return Self reference
      */
-    public Args info(String arg, String info, String argumentName) {
+    @Nonnull
+    public Args info(@Nonnull String arg, String info, String argumentName) {
         arg = checkExist(arg);
         ArgResult ares = defs.get(arg);
         if (info != null) {
@@ -177,7 +186,8 @@ public class Args {
      * @param dependencies The list of dependencies of this dependant parameter
      * @return Self reference
      */
-    public Args dep(String dependant, String... dependencies) {
+    @Nonnull
+    public Args dep(@Nonnull String dependant, @Nonnull String... dependencies) {
         dependant = checkExist(dependant);
         depends.put(defs.get(dependant), sets(dependencies, 1, "dependency"));
         return this;
@@ -193,7 +203,8 @@ public class Args {
      * is required only under specific conditions.
      * @return Self reference
      */
-    public Args req(String... req) {
+    @Nonnull
+    public Args req(@Nonnull String... req) {
         required.add(sets(req, 1, "requirement"));
         return this;
     }
@@ -207,7 +218,8 @@ public class Args {
      * @param nullable List of nullable parameters
      * @return Self reference
      */
-    public Args nullable(String... nullable) {
+    @Nonnull
+    public Args nullable(@Nonnull String... nullable) {
         this.nullable.addAll(sets(nullable, 1, "nullable parameters"));
         return this;
     }
@@ -218,7 +230,8 @@ public class Args {
      * @param uniq A list of unique parameters. SHould be at least two.
      * @return Self reference
      */
-    public Args uniq(String... uniq) {
+    @Nonnull
+    public Args uniq(@Nonnull String... uniq) {
         unique.add(sets(uniq, 2, "uniquement"));
         return this;
     }
@@ -232,7 +245,8 @@ public class Args {
      * @param multi List of parameters that could be called more than once.
      * @return Self reference
      */
-    public Args multi(String... multi) {
+    @Nonnull
+    public Args multi(@Nonnull String... multi) {
         this.multi.addAll(sets(multi, 1, "multi parameters"));
         return this;
     }
@@ -247,7 +261,8 @@ public class Args {
      * is needed.
      * @return Self reference
      */
-    public Args group(String groupname, String... items) {
+    @Nonnull
+    public Args group(String groupname, @Nonnull String... items) {
         if (groupname == null)
             groupname = "";
         groupname = groupname.trim();
@@ -276,6 +291,7 @@ public class Args {
      * sign, '-'
      * @return Self reference
      */
+    @Nonnull
     public Args setCondensed(char condensedChar) {
         this.condensedChar = condensedChar;
         return this;
@@ -295,6 +311,7 @@ public class Args {
      * @param joinedChar The joined character, usually an equal sign '='
      * @return Self reference
      */
+    @Nonnull
     public Args setJoined(char joinedChar) {
         this.joinedChar = joinedChar;
         return this;
@@ -313,8 +330,9 @@ public class Args {
      * be used between them, instead of the usual space.
      * @return Self reference
      */
-    public Args usage(String... args) {
-        if (args == null || args.length == 0)
+    @Nonnull
+    public Args usage(@Nonnull String... args) {
+        if (args.length == 0)
             throw new ArgumentException("Argument usage should have at least one argument");
         List<String> items = new ArrayList<>();
         for (String arg : args) {
@@ -336,6 +354,7 @@ public class Args {
      * @param error The callback to use
      * @return Self reference
      */
+    @Nonnull
     public Args error(ArgResult error) {
         this.error = error == null ? t -> {
         } : error;
@@ -377,6 +396,7 @@ public class Args {
      * @return A list of arguments not belonging to any defined argument, i.e.
      * free arguments.
      */
+    @Nonnull
     public List<String> parse(String... args) {
         List<String> rest = new ArrayList<>();
         Set<ArgResult> found = new LinkedHashSet<>();
@@ -448,6 +468,7 @@ public class Args {
         return false;   // All have missing requirements, so none could be used anyways
     }
 
+    @Nonnull
     public String getUsage() {
         StringBuilder out = new StringBuilder();
         getUsage(out, null);
@@ -471,6 +492,7 @@ public class Args {
     }
 
     @Override
+    @Nonnull
     public String toString() {
         if (defs.isEmpty())
             return "[No arguments defined]" + NL;

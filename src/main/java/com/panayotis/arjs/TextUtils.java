@@ -15,7 +15,7 @@ import java.util.List;
  *
  * @author teras
  */
-public class TextUtils {
+class TextUtils {
 
     public static String spaces(int i) {
         char[] chars = new char[i];
