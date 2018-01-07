@@ -21,7 +21,6 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 
 /**
- *
  * @author teras
  */
 public class Args {
@@ -39,6 +38,7 @@ public class Args {
     private final Set<ArgResult> transitive = new LinkedHashSet<>();
     private final Set<ArgResult> multi = new LinkedHashSet<>();
     private final Map<ArgResult, Set<ArgResult>> depends = new LinkedHashMap<>();
+    private final Map<ArgResult, Set<ArgResult>> softdepends = new LinkedHashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
     private final Set<ArgResult> nullable = new LinkedHashSet<>();
@@ -49,13 +49,14 @@ public class Args {
     };
     private char joinedChar = '\0';
     private char condensedChar = '\0';
+    private boolean namesAsGiven = false;
 
     /**
      * Define a new parameter
      *
-     * @param arg The name of the parameter
+     * @param arg    The name of the parameter
      * @param result A build-in parameter handler, which directly stores the
-     * value to the desired variable.
+     *               value to the desired variable.
      * @return Self reference
      */
     @Nonnull
@@ -67,11 +68,11 @@ public class Args {
     /**
      * Define a new parameter
      *
-     * @param arg The name of the parameter
+     * @param arg    The name of the parameter
      * @param result A general purpose handler for the specific parameter. The
-     * value of the parameter will be brought as an argument back here. Note
-     * this is a transitive parameter, i.e. a value after this parameter will
-     * always be required.
+     *               value of the parameter will be brought as an argument back here. Note
+     *               this is a transitive parameter, i.e. a value after this parameter will
+     *               always be required.
      * @return Self reference
      */
     @Nonnull
@@ -83,10 +84,10 @@ public class Args {
     /**
      * Define a new parameter
      *
-     * @param arg The name of the parameter
+     * @param arg   The name of the parameter
      * @param found A general purpose non transitive handler for the specific
-     * parameter. Note that no parameter value will be required, thus no input
-     * value will be provided.
+     *              parameter. Note that no parameter value will be required, thus no input
+     *              value will be provided.
      * @return Self reference
      */
     @Nonnull
@@ -125,7 +126,7 @@ public class Args {
      * Define a new alias for a command
      *
      * @param source The original parameter reference
-     * @param dest The new parameter
+     * @param dest   The new parameter
      * @return Self reference
      */
     @Nonnull
@@ -139,7 +140,7 @@ public class Args {
     /**
      * Provide information about a parameter
      *
-     * @param arg The name of the parameter
+     * @param arg  The name of the parameter
      * @param info The information to display for this parameter
      * @return Self reference
      */
@@ -152,11 +153,11 @@ public class Args {
      * Provide information about a parameter. This method has meaning only for
      * transitive parameters.
      *
-     * @param arg The name of the parameter
-     * @param info The information to display for this parameter
+     * @param arg          The name of the parameter
+     * @param info         The information to display for this parameter
      * @param argumentName The name of the value, as displayed in help messages.
-     * By default the name is upper-case the name of the longest parameter
-     * itself, or ARG, if the name is too small.
+     *                     By default the name is upper-case the name of the longest parameter
+     *                     itself, or ARG, if the name is too small.
      * @return Self reference
      */
     @Nonnull
@@ -180,11 +181,13 @@ public class Args {
     }
 
     /**
-     * Define a dependency for this parameter
+     * Define a strong dependency for this parameter. The depenency parameter should
+     * already have been provided, for the option to ba valid.
      *
-     * @param dependant The name of the dependant parameter
-     * @param dependencies The list of dependencies of this dependant parameter
+     * @param dependant    The name of the dependant parameter
+     * @param dependencies The list of hard dependencies of this dependant parameter
      * @return Self reference
+     * @see #depsoft(String, String...)
      */
     @Nonnull
     public Args dep(@Nonnull String dependant, @Nonnull String... dependencies) {
@@ -194,13 +197,29 @@ public class Args {
     }
 
     /**
+     * Define a soft dependency for this parameter. Although to use this parameter the
+     * dependency is required, the definition of the dependency can follow the definition
+     * of this parameter.
+     *
+     * @param dependant    The name of the dependant parameter
+     * @param dependencies The list of soft dependencies of this dependant parameter
+     * @return Self reference
+     */
+    @Nonnull
+    public Args depsoft(@Nonnull String dependant, @Nonnull String... dependencies) {
+        dependant = checkExist(dependant);
+        softdepends.put(defs.get(dependant), sets(dependencies, 1, "dependency"));
+        return this;
+    }
+
+    /**
      * Define a list of parameters as required.
      *
      * @param req The list of required parameters. This list could contain even
-     * only one parameter. If a required parameter could not be provided due to
-     * dependencies, then this parameter is not counted as a required parameter.
-     * This is to help complex dependencies and requirements, when one parameter
-     * is required only under specific conditions.
+     *            only one parameter. If a required parameter could not be provided due to
+     *            dependencies, then this parameter is not counted as a required parameter.
+     *            This is to help complex dependencies and requirements, when one parameter
+     *            is required only under specific conditions.
      * @return Self reference
      */
     @Nonnull
@@ -257,8 +276,8 @@ public class Args {
      * section, more than one sections (groups) could be defined.
      *
      * @param groupname The name of the group.
-     * @param items The list of the grouped parameters. At least one parameter
-     * is needed.
+     * @param items     The list of the grouped parameters. At least one parameter
+     *                  is needed.
      * @return Self reference
      */
     @Nonnull
@@ -278,7 +297,7 @@ public class Args {
      * letter parameters, that are prefixed with the condensed parameters, could
      * be grouped together with no space between them. Transitive parameters
      * will use the next available argument as input. If more than one
-     * transitive parameters are groped, then the corresponding parameters that
+     * transitive parameters are grouped, then the corresponding parameters that
      * follow will be used as input.
      * <br>
      * As an example, let's say {@code -b} is a valid non transient parameter
@@ -288,7 +307,7 @@ public class Args {
      * this series of parameters: {@code -b -b -s hello -b -s world -b}
      *
      * @param condensedChar The condensed prefix character, usually the minus
-     * sign, '-'
+     *                      sign, '-'
      * @return Self reference
      */
     @Nonnull
@@ -321,13 +340,13 @@ public class Args {
      * Define a new application usage.
      *
      * @param args List of parameters to display usage. Note that here no
-     * parameter validation is strictly performed. Although parameters are
-     * recognized and handled accordingly, any kind of text could be used.
-     * <br>
-     * It is a common practice to start with the name of the application, and
-     * also display any free arguments whenever feels appropriate. Moreover, if
-     * unique parameters are displayed side by side, then the OR symbol '|' will
-     * be used between them, instead of the usual space.
+     *             parameter validation is strictly performed. Although parameters are
+     *             recognized and handled accordingly, any kind of text could be used.
+     *             <br>
+     *             It is a common practice to start with the name of the application, and
+     *             also display any free arguments whenever feels appropriate. Moreover, if
+     *             unique parameters are displayed side by side, then the OR symbol '|' will
+     *             be used between them, instead of the usual space.
      * @return Self reference
      */
     @Nonnull
@@ -439,6 +458,14 @@ public class Args {
             System.err.print(helpText);
             System.exit(0);
         }
+
+        // Check soft dependencies
+        for (ArgResult cons : found) {
+            Set<ArgResult> softDeps = softdepends.get(cons);
+            if (softDeps != null && !containsAny(softDeps, found))
+                error.result("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps));
+        }
+
         // Check Required
         for (Set<ArgResult> group : required)
             if (shouldNotMiss(group, found))
@@ -461,8 +488,11 @@ public class Args {
             return false;   // required item(s) found
         // Maybe it is missing due to dependencies.
         for (ArgResult req : required) {
-            Set<ArgResult> deps = depends.get(req);
-            if (deps == null || !getCommon(deps, found).isEmpty())   // no dependencies found, or dependenices are already present
+            Set<ArgResult> depsHard = depends.get(req);
+            Set<ArgResult> depsSoft = softdepends.get(req);
+            if (depsHard == null || depsSoft == null)
+                return true;    // no dependencies found
+            if (!getCommon(depsHard, found).isEmpty() && !getCommon(depsSoft, found).isEmpty())   // dependencies are already present
                 return true;
         }
         return false;   // All have missing requirements, so none could be used anyways
@@ -478,6 +508,20 @@ public class Args {
                 print(out, "For a detailed description of all parameters, please invoke the application with the " + helparg + " parameter.");
         }
         return out.toString();
+    }
+
+    /**
+     * Whether to display biggest name or first name of an argument.
+     * By default, the biggest name of an argument is displayed when parsing arguments.
+     * With this option it is possible to change this and display the first defined property instead.
+     *
+     * @param asGiven false, to display the biggest argument name, true to display the first. Defaults to false
+     * @return Self reference
+     */
+    @Nonnull
+    public Args setNamesAsGiven(boolean asGiven) {
+        namesAsGiven = asGiven;
+        return this;
     }
 
     private boolean getUsage(StringBuilder out, Collection<String> filter) {
@@ -515,27 +559,8 @@ public class Args {
                 print(out, "Only one of argument" + getArgsWithPlural(set) + " could be used simultaneously; they are mutually exclusive.");
         }
 
-        if (!depends.isEmpty()) {
-            out.append(NL);
-            Map<Set<ArgResult>, Collection<ArgResult>> depmap = new LinkedHashMap<>();    // dependencies, dependents
-            for (ArgResult m : depends.keySet()) {
-                // Reconstruct multiple dependencies into groups of the same type
-                Set<ArgResult> dependencies = depends.get(m);
-                Collection<ArgResult> items = depmap.get(dependencies);
-                if (items == null) {
-                    items = new LinkedHashSet<>();
-                    depmap.put(dependencies, items);
-                }
-                items.add(m);
-            }
-            for (Set<ArgResult> dependecies : depmap.keySet()) {
-                Collection<ArgResult> dependents = depmap.get(dependecies);
-                print(out, (dependents.size() == 1
-                        ? "Argument " + getArg(dependents.iterator().next())
-                        : "Each one of arguments " + getArgs(dependents))
-                        + " depends on the pre-existence of argument" + getArgsWithPlural(dependecies) + ".");
-            }
-        }
+        printDependencies(out, depends, true);
+        printDependencies(out, softdepends, true);
 
         if (!multi.isEmpty()) {
             out.append(NL);
@@ -578,6 +603,25 @@ public class Args {
         }
 
         return out.toString();
+    }
+
+    private void printDependencies(StringBuilder out, Map<ArgResult, Set<ArgResult>> cdeps, boolean strong) {
+        if (!cdeps.isEmpty()) {
+            out.append(NL);
+            Map<Set<ArgResult>, Collection<ArgResult>> depmap = new LinkedHashMap<>();    // dependencies, dependents
+            for (ArgResult m : cdeps.keySet()) {
+                // Reconstruct multiple dependencies into groups of the same type
+                Set<ArgResult> dependencies = cdeps.get(m);
+                depmap.computeIfAbsent(dependencies, k -> new LinkedHashSet<>()).add(m);
+            }
+            for (Set<ArgResult> dependencies : depmap.keySet()) {
+                Collection<ArgResult> dependents = depmap.get(dependencies);
+                print(out, (dependents.size() == 1
+                        ? "Argument " + getArg(dependents.iterator().next())
+                        : "Each one of arguments " + getArgs(dependents))
+                        + " depends on the " + (strong ? "pre-" : "") + "existence of argument" + getArgsWithPlural(dependencies) + ".");
+            }
+        }
     }
 
     private void print(StringBuilder out, String message) {
@@ -730,6 +774,12 @@ public class Args {
                         boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
                         if (missing)
                             wrongParams.add(res);
+                        else {
+                            reqDeps = softdepends.get(res);
+                            missing = reqDeps != null && !containsAny(reqDeps, upToNow);
+                            if (missing)
+                                wrongParams.add(res);
+                        }
                         upToNow.add(res);
 
                         boolean req = isInCollection(required, res);
@@ -821,16 +871,18 @@ public class Args {
 
     private String getArg(ArgResult cons, boolean full) {
         StringBuilder name = new StringBuilder();
+        String last = "";
         for (String arg : defs.keySet())
             if (defs.get(arg) == cons) {
-                if (!full) {
-                    if (arg.length() <= (name.length() - 1))
-                        continue;
-                    name.delete(0, name.length());
-                }
-                name.append("|").append(arg);
+                if (full) {
+                    last = arg;
+                    name.append('|').append(last);
+                } else if (namesAsGiven)
+                    return arg;
+                else if (arg.length() > last.length())
+                    last = arg;
             }
-        return name.length() > 0 ? name.substring(1) : "";
+        return last.length() > 0 ? (full ? name.substring(1) : last) : "";
     }
 
     private String getArgs(Collection<ArgResult> col) {
