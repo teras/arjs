@@ -37,6 +37,7 @@ public class Args {
     private final Map<ArgResult, String> infoname = new LinkedHashMap<>();
     private final Set<ArgResult> transitive = new LinkedHashSet<>();
     private final Set<ArgResult> multi = new LinkedHashSet<>();
+    private final Set<ArgResult> passthrough = new LinkedHashSet<>();
     private final Map<ArgResult, Set<ArgResult>> depends = new LinkedHashMap<>();
     private final Map<ArgResult, Set<ArgResult>> softdepends = new LinkedHashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
@@ -125,15 +126,15 @@ public class Args {
     /**
      * Define a new alias for a command
      *
-     * @param source The original parameter reference
-     * @param dest   The new parameter
+     * @param original The original parameter reference
+     * @param alias    The new parameter
      * @return Self reference
      */
     @Nonnull
-    public Args alias(@Nonnull String source, @Nonnull String dest) {
-        source = checkExist(source);
-        dest = checkNotExists(dest);
-        defs.put(dest, defs.get(source));
+    public Args alias(@Nonnull String original, @Nonnull String alias) {
+        original = checkExist(original);
+        alias = checkNotExists(alias);
+        defs.put(alias, defs.get(original));
         return this;
     }
 
@@ -229,10 +230,11 @@ public class Args {
     }
 
     /**
-     * List of parameters that could be empty. By default if a transitive
-     * parameter is provided with an empty value, "", then this value will be
-     * ignored and an error will be thrown. When called a parameter nullable,
-     * the behavior is changed and could carry an empty parameter.
+     * List of transitive parameters that could be empty. By default if a
+     * transitive parameter is provided with an empty value, "", then this
+     * value will be ignored and an error will be thrown. When called a
+     * parameter nullable, the behavior is changed and could carry an empty
+     * parameter.
      *
      * @param nullable List of nullable parameters
      * @return Self reference
@@ -267,6 +269,23 @@ public class Args {
     @Nonnull
     public Args multi(@Nonnull String... multi) {
         this.multi.addAll(sets(multi, 1, "multi parameters"));
+        return this;
+    }
+
+    /**
+     * List of parameters that should be passed through to the remaining
+     * arguments. These arguments will be properly processed, but instead of
+     * consumed, will be passed through as if the system didn't recognize them.
+     * <p>
+     * This option is useful if you want some parameters to not disappear but
+     * appear instead for post-processing of some sort.
+     *
+     * @param passthrough The pass-through parameters
+     * @return Self reference
+     */
+    @Nonnull
+    public Args passthrough(@Nonnull String... passthrough) {
+        this.passthrough.addAll(sets(passthrough, 1, "passthrough parameters"));
         return this;
     }
 
@@ -437,15 +456,17 @@ public class Args {
                         error.result("Argument " + getArg(cons) + " should appear only once");
                 } else
                     found.add(cons);
+                if (passthrough.contains(cons))
+                    rest.add(arg);
                 if (transitive.contains(cons)) {
                     if (!iterator.hasNext()) {
                         error.result("Too few arguments: unable to find value of argument " + arg);
                         break;
                     }
                     arg = iterator.next();
+                    if (!nullable.contains(cons) && arg.isEmpty())
+                        error.result("Parameter " + getArg(cons) + " should not have an empty value");
                 }
-                if (!nullable.contains(cons) && arg.isEmpty())
-                    error.result("Parameter " + getArg(cons) + " should not have an empty value");
                 try {
                     cons.result(arg);
                 } catch (Exception ex) {
