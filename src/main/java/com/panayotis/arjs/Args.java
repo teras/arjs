@@ -5,19 +5,13 @@
  */
 package com.panayotis.arjs;
 
-import static com.panayotis.arjs.TextUtils.spaces;
+import static com.panayotis.arjs.HelpUtils.combine;
+import static com.panayotis.arjs.HelpUtils.spaces;
+
 import com.panayotis.jerminal.Jerminal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 
 /**
@@ -182,7 +176,7 @@ public class Args {
     }
 
     /**
-     * Define a strong dependency for this parameter. The depenency parameter should
+     * Define a strong dependency for this parameter. The dependency parameter should
      * already have been provided, for the option to ba valid.
      *
      * @param dependant    The name of the dependant parameter
@@ -489,7 +483,7 @@ public class Args {
 
         // Check Required
         for (Set<ArgResult> group : required)
-            if (shouldNotMiss(group, found))
+            if (areArgsMissing(group, found))
                 if (group.size() == 1)
                     error.result("Argument " + getArg(group.iterator().next()) + " is required but not found");
                 else
@@ -504,19 +498,17 @@ public class Args {
         return rest;
     }
 
-    private boolean shouldNotMiss(Collection<ArgResult> required, Collection<ArgResult> found) {
-        if (!getCommon(required, found).isEmpty())
-            return false;   // required item(s) found
-        // Maybe it is missing due to dependencies.
+    private boolean areArgsMissing(Collection<ArgResult> required, Collection<ArgResult> found) {
         for (ArgResult req : required) {
-            Set<ArgResult> depsHard = depends.get(req);
-            Set<ArgResult> depsSoft = softdepends.get(req);
-            if (depsHard == null || depsSoft == null)
-                return true;    // no dependencies found
-            if (!getCommon(depsHard, found).isEmpty() && !getCommon(depsSoft, found).isEmpty())   // dependencies are already present
-                return true;
+            if (found.contains(req))    // found one of the requirements
+                return false;
+            // Still missing, but maybe it is missing due to dependencies.
+            Collection<ArgResult> allDependencies = combine(depends.get(req), softdepends.get(req));   // get all dependencies
+            if (!allDependencies.isEmpty()   // indeed, it has a dependency
+                    && getCommon(allDependencies, found).isEmpty())     // the dependency is missing
+                return false;      // not really missing since the requirements are not fulfilled
         }
-        return false;   // All have missing requirements, so none could be used anyways
+        return true;   // none of the possible instances of this requirement could be fulfilled
     }
 
     @Nonnull
@@ -651,7 +643,7 @@ public class Args {
 
     private void print(StringBuilder out, String message, String firstInset, String allInsets) {
         String inset = firstInset;
-        for (String s : TextUtils.split(message, false, LINELENGTH - firstInset.length(), LINELENGTH - allInsets.length())) {
+        for (String s : HelpUtils.split(message, false, LINELENGTH - firstInset.length(), LINELENGTH - allInsets.length())) {
             out.append(inset).append(s).append(NL);
             inset = allInsets;
         }

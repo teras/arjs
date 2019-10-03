@@ -9,11 +9,12 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 /**
- *
  * @author teras
  */
 public class ArgsTest {
@@ -61,7 +62,7 @@ public class ArgsTest {
 
         args.parse("something", "else");
         assertFalse("Default boolean should be false", bool.get());
-        assertTrue("Default String should be null", string.get() == null);
+        assertNull("Default String should be null", string.get());
         assertEquals("Default String with default,", "hey", defstring.get());
         assertEquals("Default multi bool,", (Integer) 0, mbool.get());
         assertTrue("Default multi String should be empty", mstring.get().isEmpty());
@@ -83,6 +84,58 @@ public class ArgsTest {
         assertEquals("Default multi String contents", "[hello, hi, D1, D2, D3]", mdefstring.get().toString());
     }
 
+    @Test
+    public void testBooleanInverse() {
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg();
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("hello");
+            assertFalse(t.get());
+            assertTrue(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg(true);
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("hello");
+            assertTrue(t.get());
+            assertFalse(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg();
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p");
+            assertTrue(t.get());
+            assertFalse(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg();
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n");
+            assertFalse(t.get());
+            assertTrue(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg();
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            assertFalse(t.get());
+            assertTrue(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg();
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            assertTrue(t.get());
+            assertFalse(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg(true);
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            assertFalse(t.get());
+            assertTrue(t.getInverse().get());
+        }
+        {
+            BoolExclusiveArg t = new BoolExclusiveArg(true);
+            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            assertTrue(t.get());
+            assertFalse(t.getInverse().get());
+        }
+    }
+
     /**
      * Test of parse method, of class Args.
      */
@@ -100,40 +153,40 @@ public class ArgsTest {
                 .def("--multi", () -> multi.addAndGet(1))
                 .multi("--multi")
                 .alias("-h", "--help")
-                .def("-o", out -> output.set(out))
+                .def("-o", output::set)
                 .req("-o")
                 .alias("-o", "--output")
                 .def("--run", () -> run.set(true))
                 .uniq("-o", "--run")
-                .error(err -> error.set(err));
+                .error(error::set);
 
         args.parse((String[]) null);
-        args.parse(new String[]{});
+        args.parse();
 
-        args.parse(new String[]{"-h"});
+        args.parse("-h");
         assertTrue("Help argument not found", help.get());
-        assertFalse("Should fail with missing argument", error.get() == null);
+        System.out.println(error.get());
+        assertNotNull("Should fail with missing argument", error.get());
 
         reset(help, run, output, error, multi);
-        args.parse(new String[]{"-o", "something", "--run"});
-        System.out.println(error.get());
+        args.parse("-o", "something", "--run");
         assertTrue("Wrong type of error, expected \"uniq\"", error.get() != null && error.get().contains("uniq"));
         assertTrue("Error should contain '[--output, --run]' ", error.get().contains("[--output, --run]"));
 
         reset(help, run, output, error, multi);
-        rest2 = args.parse(new String[]{"-h", "-h", "unknown", "--help"});
+        rest2 = args.parse("-h", "-h", "unknown", "--help");
         assertFalse("Should fail with rest argument non existent", rest2.isEmpty());
         assertEquals("Size of missing arguments does not match", 1, rest2.size());
         assertEquals("Missing argument does not match", "unknown", rest2.get(0));
 
         reset(help, run, output, error, multi);
-        args.parse(new String[]{"-h", "-o", "some", "--multi", "--multi"});
-        assertTrue("No errors should be found", error.get() == null);
+        args.parse("-h", "-o", "some", "--multi", "--multi");
+        assertNull("No errors should be found", error.get());
         assertEquals("Output should be parsed", "some", output.get());
         assertEquals("Multiple parameter should be called twice", 2, multi.get());
 
         reset(help, run, output, error, multi);
-        args.parse(new String[]{"-h", "-h", "-o"});
+        args.parse("-h", "-h", "-o");
         assertTrue("Wrong type of error, expected \"Too few arguments\"", error.get() != null && error.get().contains("few"));
     }
 

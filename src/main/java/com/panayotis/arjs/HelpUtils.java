@@ -5,29 +5,24 @@
  */
 package com.panayotis.arjs;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
- *
  * @author teras
  */
-class TextUtils {
+class HelpUtils {
 
-    public static String spaces(int i) {
+    static String spaces(int i) {
         char[] chars = new char[i];
         Arrays.fill(chars, ' ');
         return new String(chars);
     }
 
-    public static Collection<String> split(String text, boolean justified, int size) {
+    static Collection<String> split(String text, boolean justified, int size) {
         return split(text, justified, size, size);
     }
 
-    public static Collection<String> split(String text, boolean justified, int firstline, int size) {
+    static Collection<String> split(String text, boolean justified, int firstline, int size) {
         if (firstline < 2)
             firstline = 2;
         if (size < 2)
@@ -81,4 +76,13 @@ class TextUtils {
         return out.substring(1);
     }
 
+    @SafeVarargs
+    static <T> Collection<T> combine(Collection<T>... collections) {
+        Collection<T> result = new LinkedHashSet<>();
+        if (collections != null)
+            for (Collection<T> col : collections)
+                if (col != null)
+                    result.addAll(col);
+        return result;
+    }
 }
