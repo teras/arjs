@@ -6,7 +6,6 @@
 package com.panayotis.arjs;
 
 /**
- *
  * @author teras
  */
 public class BoolArg extends BaseArg<Boolean> {

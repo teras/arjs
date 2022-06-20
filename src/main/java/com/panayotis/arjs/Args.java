@@ -5,14 +5,14 @@
  */
 package com.panayotis.arjs;
 
-import static com.panayotis.arjs.HelpUtils.combine;
-import static com.panayotis.arjs.HelpUtils.spaces;
-
 import com.panayotis.jerminal.Jerminal;
 
-import java.util.*;
-import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
+import java.util.*;
+
+import static com.panayotis.arjs.ErrorStrategy.THROW_EXCEPTION;
+import static com.panayotis.arjs.HelpUtils.combine;
+import static com.panayotis.arjs.HelpUtils.spaces;
 
 /**
  * @author teras
@@ -39,9 +39,8 @@ public class Args {
     private final Set<ArgResult> nullable = new LinkedHashSet<>();
     private final Map<String, Set<ArgResult>> groups = new LinkedHashMap<>();
     private final List<List<String>> usages = new ArrayList<>();
-    private ArgResult error = err -> {
-        throw new ArgumentException(err);
-    };
+    private ArgResult errorArg;
+    private ErrorStrategy errorStrategy;
     private char joinedChar = '\0';
     private char condensedChar = '\0';
     private boolean namesAsGiven = false;
@@ -388,9 +387,23 @@ public class Args {
      */
     @Nonnull
     public Args error(ArgResult error) {
-        this.error = error == null ? t -> {
-        } : error;
+        this.errorArg = error;
+        this.errorStrategy = null;
         return this;
+    }
+
+    @Nonnull
+    public Args error(ErrorStrategy strategy) {
+        this.errorArg = null;
+        this.errorStrategy = strategy;
+        return this;
+    }
+
+    private void execError(String errorMessage) {
+        if (errorStrategy != null && errorStrategy.requiresHelp) {
+            System.out.println(toString());
+        }
+        (errorArg == null ? ((errorStrategy == null ? THROW_EXCEPTION : errorStrategy).getBehavior(this)) : errorArg).result(errorMessage);
     }
 
     private String getHelpText(Collection<ArgResult> found, Collection<String> rest) {
@@ -401,7 +414,7 @@ public class Args {
                 break;
             case 1:
                 if (!rest.isEmpty())
-                    error.result("Unable to provide help on free parameter '" + rest.iterator().next() + "'");
+                    execError("Unable to provide help on free parameter '" + rest.iterator().next() + "'");
                 else {
                     ArgResult grouptag = found.iterator().next();
                     Collection<String> helpargtex = getArgValues(Arrays.asList(grouptag));
@@ -409,13 +422,13 @@ public class Args {
                     StringBuilder found_groups = new StringBuilder();
                     getUsage(found_usage, helpargtex);
                     groupArgs(found_groups, grouptag);
-                    helpText = found_usage.toString() + (found_usage.length() > 0 && found_groups.length() > 0 ? NL : "") + found_groups.toString();
+                    helpText = found_usage + (found_usage.length() > 0 && found_groups.length() > 0 ? NL : "") + found_groups.toString();
                     if (helpText.isEmpty())
-                        error.result("Unable to find help for argument " + getArg(grouptag));
+                        execError("Unable to find help for argument " + getArg(grouptag));
                 }
                 break;
             default:
-                error.result("Help request is available only on a single argument");
+                execError("Help request is available only on a single argument");
                 break;
         }
         return helpText;
@@ -438,33 +451,33 @@ public class Args {
             String arg = iterator.next();
             ArgResult cons = defs.get(arg);
             if (helpText != null)
-                error.result("No arguments should appear after help request");
+                execError("No arguments should appear after help request");
             else if (cons == HELP)
                 helpText = getHelpText(found, rest);
             else if (cons != null) {
                 Set<ArgResult> reqDeps = depends.get(cons);
                 if (reqDeps != null && !containsAny(reqDeps, found))
-                    error.result("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps));
+                    execError("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps));
                 if (found.contains(cons)) {
                     if (!multi.contains(cons))
-                        error.result("Argument " + getArg(cons) + " should appear only once");
+                        execError("Argument " + getArg(cons) + " should appear only once");
                 } else
                     found.add(cons);
                 if (passthrough.contains(cons))
                     rest.add(arg);
                 if (transitive.contains(cons)) {
                     if (!iterator.hasNext()) {
-                        error.result("Too few arguments: unable to find value of argument " + arg);
+                        execError("Too few arguments: unable to find value of argument " + arg);
                         break;
                     }
                     arg = iterator.next();
                     if (!nullable.contains(cons) && arg.isEmpty())
-                        error.result("Parameter " + getArg(cons) + " should not have an empty value");
+                        execError("Parameter " + getArg(cons) + " should not have an empty value");
                 }
                 try {
                     cons.result(arg);
                 } catch (Exception ex) {
-                    error.result("Invalid parameter '" + getArg(cons) + "' using value '" + arg + "': " + ex.getMessage());
+                    execError("Invalid parameter '" + getArg(cons) + "' using value '" + arg + "': " + ex.getMessage());
                 }
             } else
                 rest.add(arg);
@@ -478,22 +491,22 @@ public class Args {
         for (ArgResult cons : found) {
             Set<ArgResult> softDeps = softdepends.get(cons);
             if (softDeps != null && !containsAny(softDeps, found))
-                error.result("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps));
+                execError("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps));
         }
 
         // Check Required
         for (Set<ArgResult> group : required)
             if (areArgsMissing(group, found))
                 if (group.size() == 1)
-                    error.result("Argument " + getArg(group.iterator().next()) + " is required but not found");
+                    execError("Argument " + getArg(group.iterator().next()) + " is required but not found");
                 else
-                    error.result("At least one of arguments " + getArgs(group) + " are required but none found");
+                    execError("At least one of arguments " + getArgs(group) + " are required but none found");
 
         // Check Unique
         for (Set<ArgResult> group : unique) {
             Collection<ArgResult> list = getCommon(group, found);
             if (list.size() > 1)
-                error.result("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
+                execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
         }
         return rest;
     }
@@ -542,7 +555,7 @@ public class Args {
         usages(uout, filter);
         if (uout.length() > 0) {
             out.append("Usage:").append(NL);
-            out.append(uout.toString());
+            out.append(uout);
             return true;
         }
         return false;

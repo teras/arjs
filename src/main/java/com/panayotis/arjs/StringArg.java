@@ -6,10 +6,9 @@
 package com.panayotis.arjs;
 
 /**
- *
  * @author teras
  */
-public class StringArg extends TypedArg<String> {
+public class StringArg extends TypedArg<String> implements CharSequence {
 
     public StringArg() {
         this(null);
@@ -19,4 +18,29 @@ public class StringArg extends TypedArg<String> {
         super(t -> t, val);
     }
 
+    @Override
+    public int length() {
+        return getCheckedValue().length();
+    }
+
+    @Override
+    public char charAt(int index) {
+        return getCheckedValue().charAt(index);
+    }
+
+    @Override
+    public CharSequence subSequence(int start, int end) {
+        return getCheckedValue().subSequence(start, end);
+    }
+
+    @Override
+    public String toString() {
+        return getCheckedValue();
+    }
+
+    private String getCheckedValue() {
+        if (!isSet())
+            throw new IndexOutOfBoundsException("Argument is not set");
+        return get();
+    }
 }

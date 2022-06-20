@@ -28,6 +28,10 @@ public abstract class BaseArg<T> {
         return true;
     }
 
+    public boolean isSet() {
+        return val != null;
+    }
+
     @Override
     public String toString() {
         return val == null ? null : val.toString();
@@ -47,9 +51,6 @@ public abstract class BaseArg<T> {
         if (getClass() != obj.getClass())
             return false;
         final BaseArg<?> other = (BaseArg<?>) obj;
-        if (!Objects.equals(this.val, other.val))
-            return false;
-        return true;
+        return Objects.equals(this.val, other.val);
     }
-
 }

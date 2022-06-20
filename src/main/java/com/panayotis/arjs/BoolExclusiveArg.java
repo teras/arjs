@@ -11,10 +11,10 @@ public class BoolExclusiveArg extends BoolArg {
         this(status, true);
     }
 
-    private BoolExclusiveArg(boolean status, boolean shouldMakeInverse) {
-        super(status);
+    private BoolExclusiveArg(Boolean status, boolean shouldMakeInverse) {
+        super(status != null && status);
         if (shouldMakeInverse) {
-            inverse = new BoolExclusiveArg(!status, false);
+            inverse = new BoolExclusiveArg(!get(), false);
             inverse.inverse = this;
         }
     }
