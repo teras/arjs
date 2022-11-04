@@ -10,6 +10,7 @@ import java.util.Objects;
 public abstract class BaseArg<T> {
 
     private T val;
+    private boolean isSet = false;
 
     protected BaseArg(T val) {
         this.val = val;
@@ -25,11 +26,12 @@ public abstract class BaseArg<T> {
         if (val == null)
             return false;
         this.val = val;
+        isSet = true;
         return true;
     }
 
     public boolean isSet() {
-        return val != null;
+        return isSet;
     }
 
     @Override

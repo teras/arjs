@@ -18,6 +18,7 @@ public enum ErrorStrategy {
         @Override
         ArgResult getBehavior(Args args) {
             return error -> {
+                System.err.println("ERROR: " + error);
                 System.exit(1);
             };
         }

@@ -44,6 +44,7 @@ public class Args {
     private char joinedChar = '\0';
     private char condensedChar = '\0';
     private boolean namesAsGiven = false;
+    private int freeArguments = -1; // the free arguments can be as many as we want by default
 
     /**
      * Define a new parameter
@@ -399,10 +400,23 @@ public class Args {
         return this;
     }
 
+    /**
+     * Declare how mane free arguments are supported. If this method is unused, then there is no limit.
+     *
+     * @param howMany How many free arguments. Could be zero, if no free arguments are supported
+     * @return Self reference
+     */
+    @Nonnull
+    public Args freeArgs(int howMany) {
+        if (howMany < 0)
+            throw new ArgumentException("The number of free arguments cannot be negative");
+        this.freeArguments = howMany;
+        return this;
+    }
+
     private void execError(String errorMessage) {
-        if (errorStrategy != null && errorStrategy.requiresHelp) {
-            System.out.println(toString());
-        }
+        if (errorStrategy != null && errorStrategy.requiresHelp)
+            System.out.println(this);
         (errorArg == null ? ((errorStrategy == null ? THROW_EXCEPTION : errorStrategy).getBehavior(this)) : errorArg).result(errorMessage);
     }
 
@@ -508,6 +522,10 @@ public class Args {
             if (list.size() > 1)
                 execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
         }
+
+        // Check how many free arguments are allowed
+        if (rest.size() > freeArguments && freeArguments >= 0)
+            execError("The number of free arguments required are more than supported. Supported:" + freeArguments + " Found:" + rest.size());
         return rest;
     }
 
