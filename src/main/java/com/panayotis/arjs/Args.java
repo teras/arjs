@@ -36,7 +36,7 @@ public class Args {
     private final Map<ArgResult, Set<ArgResult>> softdepends = new LinkedHashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
-    private final Map<String, Collection<String>> groups = new LinkedHashMap<>();
+    private final Map<String, GroupData> groups = new LinkedHashMap<>();
     private final Collection<String> helpArgs = new HashSet<>();
     private final String name;
     private final String description;
@@ -322,6 +322,18 @@ public class Args {
     }
 
     /**
+     * Define a group of parameters. For more information, see {@link #group(String, String, StringArg, String...)}
+     *
+     * @param groupname The name of the group
+     * @param items     The list of the grouped parameters. At least one parameter
+     *                  is needed.
+     * @return Self reference
+     */
+    public Args group(String groupname, String... items) {
+        return group(groupname, null, null, items);
+    }
+
+    /**
      * Define a group of parameters. The group is characterized by a name, and a
      * set of parameters. The group name is used as the first argument of the application.
      * If a parameter is not defined in any group, then it is considered as a generic
@@ -329,12 +341,14 @@ public class Args {
      * the group it is defined in.
      *
      * @param groupname The name of the group.
+     * @param info      The information to display for this group
+     * @param holder    This argument holder will keep the name of the group
      * @param items     The list of the grouped parameters. At least one parameter
      *                  is needed.
      * @return Self reference
      */
     @Nonnull
-    public Args group(String groupname, @Nonnull String... items) {
+    public Args group(String groupname, String info, StringArg holder, @Nonnull String... items) {
         if (groupname == null)
             groupname = "";
         groupname = groupname.trim();
@@ -346,7 +360,7 @@ public class Args {
             throw new ArgumentException("Group " + groupname + " should contain at least one parameter");
         for (String item : items)
             checkExist(item);
-        groups.put(groupname, Arrays.asList(items));
+        groups.put(groupname, new GroupData(Arrays.asList(items), holder, info));
         return this;
     }
 
@@ -431,7 +445,14 @@ public class Args {
         return this;
     }
 
-
+    /**
+     * Define the names and number of free arguments. By default, the number of free arguments
+     * is unlimited. By using this method, the number of free arguments is limited to the number
+     * of parameters provided. Each parameter is the name of the free argument.
+     *
+     * @param freeArgs The names of the free arguments
+     * @return Self reference
+     */
     @Nonnull
     public Args freeArgs(String... freeArgs) {
         for (String arg : freeArgs)
@@ -444,7 +465,7 @@ public class Args {
     }
 
     /**
-     * When displaying the help message, collapse common parameters. By default all properties are displayed.
+     * When displaying the help message, collapse common parameters. By default, all properties are displayed.
      */
     public Args collapseCommon() {
         collapseCommon = true;
@@ -507,8 +528,11 @@ public class Args {
             if (!iterator.hasNext())
                 execError("The first argument should be the name of the subcommand", null);
             groupName = iterator.next();
-            if (!groups.containsKey(groupName))
+            GroupData groupData = groups.get(groupName);
+            if (groupData == null)
                 execError("The subcommand " + groupName + " is not defined", null);
+            if (groupData != null && groupData.groupArg != null)
+                groupData.groupArg.setVal(groupName);
             // Group and common parameters are allowed
             argPool = findMyNamedGroupArgs(groupName);
             argPool.putAll(findRemainingNamedGroupArgs());
@@ -747,20 +771,20 @@ public class Args {
         // It is not enough to filter arguments by their name, since we want all names pointing to
         // a specific argument (even if they are aliases). So we first gather all unique arguments,
         // and then use the arguments as a filter to gather the arguements, even if they have an alias.
-        Collection<ArgResult> groupArgs = getValuesByKeys(defs, groups.get(groupName));
+        Collection<ArgResult> groupArgs = getValuesByKeys(defs, groups.get(groupName).args);
         return filterMatchingValues(defs, groupArgs);
     }
 
     private Collection<ArgResult> findMyArgs(String groupName) {
         if (groups.isEmpty())
             return new LinkedHashSet<>(defs.values());
-        return getValuesByKeys(defs, groups.get(groupName));
+        return getValuesByKeys(defs, groups.get(groupName).args);
     }
 
     private Collection<ArgResult> findRemainingArgs() {
         if (groups.isEmpty())
             return Collections.emptySet();
-        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllValues(groups));
+        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllArgs(groups));
         return findRemainingValues(defs, allGroupedArgs);
     }
 
@@ -769,39 +793,39 @@ public class Args {
             return Collections.emptyMap();
         // To get all common arguments, first we need to gather all arguments that belong to any group.
         // Then we filter all arguments that do not belong in this group.
-        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllValues(groups));
+        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllArgs(groups));
         return filterNotMatchingValues(defs, allGroupedArgs);
     }
 
     private void groupArgs(StringBuilder out, String currentGroup, Collection<ArgResult> remainingArgs) {
-        Collection<NamedGroupArgs> namedGroups = new ArrayList<>();
+        List<NamedGroupArgs> namedGroups = new ArrayList<>();
         if (groups.isEmpty())
-            namedGroups.add(new NamedGroupArgs(null, new LinkedHashSet<>(defs.values())));
+            namedGroups.add(new NamedGroupArgs(null, new LinkedHashSet<>(defs.values()), null));
         else {
             if (currentGroup != null)
-                namedGroups.add(new NamedGroupArgs("Subcommand '" + currentGroup + "'", findMyArgs(currentGroup)));
+                namedGroups.add(new NamedGroupArgs("Subcommand '" + currentGroup + "'", findMyArgs(currentGroup), groups.get(currentGroup).info));
             else
-                for (Map.Entry<String, Collection<String>> groupSet : groups.entrySet())
-                    namedGroups.add(new NamedGroupArgs("Subcommand '" + groupSet.getKey() + "'", findMyArgs(groupSet.getKey())));
+                for (Map.Entry<String, GroupData> groupSet : groups.entrySet()) {
+                    String groupRef = groupSet.getKey();
+                    namedGroups.add(new NamedGroupArgs("Subcommand '" + groupRef + "'", findMyArgs(groupRef), groups.get(groupRef).info));
+                }
             // Find remaining groups
             if (!remainingArgs.isEmpty())
-                namedGroups.add(new NamedGroupArgs("Common arguments", remainingArgs));
+                namedGroups.add(new NamedGroupArgs("Common arguments", remainingArgs, null));
         }
 
         List<List<String>> lefts = new ArrayList<>();
         List<List<String>> rights = new ArrayList<>();
-        List<String> names = new ArrayList<>();
         int max = 0;
-        for (NamedGroupArgs it : namedGroups) {
-            names.add(it.name);
+        for (NamedGroupArgs it : namedGroups)
             max = Math.max(max, singleGroupCalc(it.args, lefts, rights));
-        }
 
         max++;
         String secondLineInset = spaces(max + 4);
-        for (int i = 0; i < names.size(); i++) {
+        for (int i = 0; i < namedGroups.size(); i++) {
             out.append(NL);
-            singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, secondLineInset, out);
+            NamedGroupArgs ng = namedGroups.get(i);
+            singleGroupPrint(ng.name, ng.info, lefts.get(i), rights.get(i), max, secondLineInset, out);
         }
     }
 
@@ -821,10 +845,12 @@ public class Args {
         return maxsize;
     }
 
-    private void singleGroupPrint(String title, List<String> leftPart, List<String> rightPart, int maxsize, String secondLineInset, StringBuilder out) {
+    private void singleGroupPrint(String title, String info, List<String> leftPart, List<String> rightPart, int maxsize, String secondLineInset, StringBuilder out) {
         if (title == null)
             title = "Arguments";
         print(out, title + ":", "", "");
+        if (info != null && !info.trim().isEmpty())
+            print(out, info, "", "");
         for (int i = 0; i < leftPart.size(); i++) {
             String left = INSET + leftPart.get(i) + spaces(maxsize - leftPart.get(i).length()) + (rightPart.get(i).isEmpty() ? "" : ": ");
             print(out, rightPart.get(i), left, secondLineInset);
@@ -881,7 +907,7 @@ public class Args {
         out.append("Usage:").append(NL);
         if (group == null && !groups.isEmpty())
             for (String it : groups.keySet())
-                print(out, execName + findUsageLine(it, wrongParams, commonArgs), INSET + INSET, "");
+                print(out, execName + findUsageLine(it, wrongParams, commonArgs), INSET, "");
         else
             print(out, execName + findUsageLine(group, wrongParams, commonArgs), INSET, "");
         if (!wrongParams.isEmpty()) {
@@ -1007,19 +1033,23 @@ public class Args {
 class NamedGroupArgs {
     final String name;
     final Collection<ArgResult> args;
+    final String info;
 
-    NamedGroupArgs(String name, Collection<ArgResult> args) {
+    NamedGroupArgs(String name, Collection<ArgResult> args, String info) {
         this.name = name;
         this.args = args;
+        this.info = info;
     }
 }
 
-class GroupedArgsWithParams {
-    final Map<String, ArgResult> grouped;
-    final Map<String, ArgResult> free;
+class GroupData {
+    final Collection<String> args;
+    final StringArg groupArg;
+    final String info;
 
-    GroupedArgsWithParams(Map<String, ArgResult> grouped, Map<String, ArgResult> free) {
-        this.grouped = grouped;
-        this.free = free;
+    GroupData(Collection<String> args, StringArg groupArg, String info) {
+        this.args = args;
+        this.groupArg = groupArg;
+        this.info = info == null ? "" : info;
     }
 }

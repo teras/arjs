@@ -26,10 +26,10 @@ public class CollectionUtils {
         return result;
     }
 
-    static <K, V> Collection<V> gatherAllValues(Map<K, Collection<V>> data) {
-        Collection<V> result = new LinkedHashSet<>();
-        for (Collection<V> values : data.values())
-            result.addAll(values);
+    static Collection<String> gatherAllArgs(Map<String, GroupData> data) {
+        Collection<String> result = new LinkedHashSet<>();
+        for (GroupData values : data.values())
+            result.addAll(values.args);
         return result;
     }
 
