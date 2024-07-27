@@ -9,7 +9,6 @@ import java.math.BigInteger;
 import java.util.function.Function;
 
 /**
- *
  * @author teras
  */
 public class IntegralArg extends TypedArg<BigInteger> {
@@ -22,16 +21,64 @@ public class IntegralArg extends TypedArg<BigInteger> {
         }
     };
 
+    /**
+     * Create a new integral argument with value 0
+     */
     public IntegralArg() {
         this(BigInteger.ZERO);
     }
 
+    /**
+     * Create a new integral argument with a specific value
+     *
+     * @param val The value of the argument
+     */
     public IntegralArg(long val) {
         this(BigInteger.valueOf(val));
     }
 
+    /**
+     * Create a new integral argument with a specific value
+     *
+     * @param val The value of the argument
+     */
     public IntegralArg(BigInteger val) {
         super(conv, val);
     }
 
+    /**
+     * Get this argument as byte
+     *
+     * @return The byte value of this argument
+     */
+    public byte getByte() {
+        return getValue().byteValue();
+    }
+
+    /**
+     * Get this argument as short
+     *
+     * @return The short value of this argument
+     */
+    public short getShort() {
+        return getValue().shortValue();
+    }
+
+    /**
+     * Get this argument as int
+     *
+     * @return The int value of this argument
+     */
+    public int getInt() {
+        return getValue().intValue();
+    }
+
+    /**
+     * Get this argument as long
+     *
+     * @return The long value of this argument
+     */
+    public long getLong() {
+        return getValue().longValue();
+    }
 }

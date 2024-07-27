@@ -41,6 +41,6 @@ public class StringArg extends TypedArg<String> implements CharSequence {
     private String getCheckedValue() {
         if (!isSet())
             throw new IndexOutOfBoundsException("Argument is not set");
-        return get();
+        return getValue();
     }
 }

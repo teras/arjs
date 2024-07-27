@@ -9,22 +9,22 @@ import com.panayotis.jerminal.Jerminal;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.Supplier;
 
+import static com.panayotis.arjs.CollectionUtils.*;
 import static com.panayotis.arjs.ErrorStrategy.THROW_EXCEPTION;
 import static com.panayotis.arjs.HelpUtils.combine;
 import static com.panayotis.arjs.HelpUtils.spaces;
+import static java.util.Objects.requireNonNull;
 
 /**
  * @author teras
  */
 public class Args {
 
-    private final static String NL = System.getProperty("line.separator", "\n");
-    private final static String INSET = "  ";
+    private static final String NL = System.getProperty("line.separator", "\n");
+    private static final String INSET = "  ";
     private static final int LINELENGTH = Jerminal.getWidth();
-
-    private final ArgResult HELP = h -> {
-    };
 
     private final Map<String, ArgResult> defs = new LinkedHashMap<>();
     private final Map<ArgResult, String> info = new LinkedHashMap<>();
@@ -36,15 +36,23 @@ public class Args {
     private final Map<ArgResult, Set<ArgResult>> softdepends = new LinkedHashMap<>();
     private final List<Set<ArgResult>> required = new ArrayList<>();
     private final List<Set<ArgResult>> unique = new ArrayList<>();
-    private final Set<ArgResult> nullable = new LinkedHashSet<>();
-    private final Map<String, Set<ArgResult>> groups = new LinkedHashMap<>();
-    private final List<List<String>> usages = new ArrayList<>();
+    private final Map<String, Collection<String>> groups = new LinkedHashMap<>();
+    private final Collection<String> helpArgs = new HashSet<>();
+    private final String name;
+    private final String description;
     private ArgResult errorArg;
     private ErrorStrategy errorStrategy;
     private char joinedChar = '\0';
     private char condensedChar = '\0';
     private boolean namesAsGiven = false;
-    private int freeArguments = -1; // the free arguments can be as many as we want by default
+    private String[] freeArguments = null; // the free arguments can be as many as we want by default
+    private String execName;
+    private boolean collapseCommon = false;
+
+    public Args(String name, String description) {
+        this.name = name;
+        this.description = description;
+    }
 
     /**
      * Define a new parameter
@@ -58,6 +66,22 @@ public class Args {
     public Args def(@Nonnull String arg, BaseArg<?> result) {
         return def(arg, result == null ? t -> {
         } : result::set, result instanceof TransitiveArg, result instanceof MultiArg);
+    }
+
+
+    /**
+     * Define a new parameter
+     *
+     * @param arg    The name of the parameter
+     * @param result A build-in parameter handler, which directly stores the
+     *               value to the desired variable.
+     * @param info   The information to display for this parameter
+     * @return Self reference
+     */
+    @Nonnull
+    public Args def(@Nonnull String arg, BaseArg<?> result, String info) {
+        def(arg, result);
+        return info(arg, info);
     }
 
     /**
@@ -79,8 +103,22 @@ public class Args {
     /**
      * Define a new parameter
      *
+     * @param arg    The name of the parameter
+     * @param result A general purpose handler for the specific parameter. The
+     *               value of the parameter will be brought as an argument back here.
+     * @param info   The information to display for this parameter
+     * @return Self reference
+     */
+    public Args def(@Nonnull String arg, ArgResult result, String info) {
+        def(arg, result);
+        return info(arg, info);
+    }
+
+    /**
+     * Define a new parameter
+     *
      * @param arg   The name of the parameter
-     * @param found A general purpose non transitive handler for the specific
+     * @param found A general purpose non-transitive handler for the specific
      *              parameter. Note that no parameter value will be required, thus no input
      *              value will be provided.
      * @return Self reference
@@ -94,17 +132,18 @@ public class Args {
     }
 
     /**
-     * Define a default help parameter
+     * Define a new parameter
      *
-     * @param helpargs List of parameters that will be used as help parameters
+     * @param arg   The name of the parameter
+     * @param found A general purpose non-transitive handler for the specific
+     *              parameter. Note that no parameter value will be required, thus no input
+     *              value will be provided.
+     * @param info  The information to display for this parameter
      * @return Self reference
      */
-    @Nonnull
-    public Args defhelp(@Nonnull String... helpargs) {
-        for (String arg : helpargs)
-            defs.put(checkNotExists(arg), HELP);
-        info.put(HELP, "application usage, this text. Help can be provided on a group-based manner, by giving first the parameter characterized by this group and then the help argument.");
-        return this;
+    public Args def(@Nonnull String arg, Runnable found, String info) {
+        def(arg, found);
+        return info(arg, info);
     }
 
     private Args def(String arg, ArgResult result, boolean isTransitive, boolean isMultiArg) {
@@ -114,6 +153,21 @@ public class Args {
         if (isMultiArg)
             multi.add(result);
         defs.put(arg, result);
+        return this;
+    }
+
+    /**
+     * Define a default help parameter
+     *
+     * @param helpargs List of parameters that will be used as help parameters
+     * @return Self reference
+     */
+    @Nonnull
+    public Args defhelp(@Nonnull String... helpargs) {
+        for (String arg : helpargs) {
+            checkNotExists(arg);
+            helpArgs.add(arg);
+        }
         return this;
     }
 
@@ -224,22 +278,6 @@ public class Args {
     }
 
     /**
-     * List of transitive parameters that could be empty. By default if a
-     * transitive parameter is provided with an empty value, "", then this
-     * value will be ignored and an error will be thrown. When called a
-     * parameter nullable, the behavior is changed and could carry an empty
-     * parameter.
-     *
-     * @param nullable List of nullable parameters
-     * @return Self reference
-     */
-    @Nonnull
-    public Args nullable(@Nonnull String... nullable) {
-        this.nullable.addAll(sets(nullable, 1, "nullable parameters"));
-        return this;
-    }
-
-    /**
      * Only one of the items in this list could be used simultaneously.
      *
      * @param uniq A list of unique parameters. SHould be at least two.
@@ -284,9 +322,11 @@ public class Args {
     }
 
     /**
-     * Define a group of parameters. This is for presentation usage only. When
-     * displaying help text, instead of stacking all parameters under the Usage
-     * section, more than one sections (groups) could be defined.
+     * Define a group of parameters. The group is characterized by a name, and a
+     * set of parameters. The group name is used as the first argument of the application.
+     * If a parameter is not defined in any group, then it is considered as a generic
+     * parameter, and can be used in any group. Otherwise, a parameter cannot be used outside
+     * the group it is defined in.
      *
      * @param groupname The name of the group.
      * @param items     The list of the grouped parameters. At least one parameter
@@ -300,7 +340,13 @@ public class Args {
         groupname = groupname.trim();
         if (groupname.isEmpty())
             throw new ArgumentException("Group name should not be empty");
-        groups.put(groupname, sets(items, 1, "grouping"));
+        if (groups.containsKey(groupname))
+            throw new ArgumentException("Group " + groupname + " already defined");
+        if (items.length == 0)
+            throw new ArgumentException("Group " + groupname + " should contain at least one parameter");
+        for (String item : items)
+            checkExist(item);
+        groups.put(groupname, Arrays.asList(items));
         return this;
     }
 
@@ -350,32 +396,17 @@ public class Args {
     }
 
     /**
-     * Define a new application usage.
+     * Set the name of the executable. This is used in the help text to display
+     * the name of the executable. By default, the name of the executable is
+     * taken from application name.
      *
-     * @param args List of parameters to display usage. Note that here no
-     *             parameter validation is strictly performed. Although parameters are
-     *             recognized and handled accordingly, any kind of text could be used.
-     *             <br>
-     *             It is a common practice to start with the name of the application, and
-     *             also display any free arguments whenever feels appropriate. Moreover, if
-     *             unique parameters are displayed side by side, then the OR symbol '|' will
-     *             be used between them, instead of the usual space.
+     * @param execName The name of the executable
      * @return Self reference
      */
     @Nonnull
-    public Args usage(@Nonnull String... args) {
-        if (args.length == 0)
-            throw new ArgumentException("Argument usage should have at least one argument");
-        List<String> items = new ArrayList<>();
-        for (String arg : args) {
-            if (arg == null)
-                arg = "";
-            arg = arg.trim();
-            if (arg.isEmpty())
-                throw new ArgumentException("Argument usage could not be empty");
-            items.add(arg);
-        }
-        usages.add(items);
+    public Args execName(@Nonnull String execName) {
+        requireNonNull(execName, "Executable name should not be null");
+        this.execName = execName;
         return this;
     }
 
@@ -400,158 +431,24 @@ public class Args {
         return this;
     }
 
-    /**
-     * Declare how mane free arguments are supported. If this method is unused, then there is no limit.
-     *
-     * @param howMany How many free arguments. Could be zero, if no free arguments are supported
-     * @return Self reference
-     */
+
     @Nonnull
-    public Args freeArgs(int howMany) {
-        if (howMany < 0)
-            throw new ArgumentException("The number of free arguments cannot be negative");
-        this.freeArguments = howMany;
+    public Args freeArgs(String... freeArgs) {
+        for (String arg : freeArgs)
+            if (arg == null)
+                throw new NullPointerException("Free argument name cannot be null");
+            else if (arg.trim().isEmpty())
+                throw new ArgumentException("Free argument name cannot be empty");
+        this.freeArguments = freeArgs;
         return this;
     }
 
-    private void execError(String errorMessage) {
-        if (errorStrategy != null && errorStrategy.requiresHelp)
-            System.out.println(this);
-        (errorArg == null ? ((errorStrategy == null ? THROW_EXCEPTION : errorStrategy).getBehavior(this)) : errorArg).result(errorMessage);
-    }
-
-    private String getHelpText(Collection<ArgResult> found, Collection<String> rest) {
-        String helpText = "";
-        switch (found.size() + rest.size()) {
-            case 0:
-                helpText = toString();
-                break;
-            case 1:
-                if (!rest.isEmpty())
-                    execError("Unable to provide help on free parameter '" + rest.iterator().next() + "'");
-                else {
-                    ArgResult grouptag = found.iterator().next();
-                    Collection<String> helpargtex = getArgValues(Arrays.asList(grouptag));
-                    StringBuilder found_usage = new StringBuilder();
-                    StringBuilder found_groups = new StringBuilder();
-                    getUsage(found_usage, helpargtex);
-                    groupArgs(found_groups, grouptag);
-                    helpText = found_usage + (found_usage.length() > 0 && found_groups.length() > 0 ? NL : "") + found_groups.toString();
-                    if (helpText.isEmpty())
-                        execError("Unable to find help for argument " + getArg(grouptag));
-                }
-                break;
-            default:
-                execError("Help request is available only on a single argument");
-                break;
-        }
-        return helpText;
-    }
-
     /**
-     * Parse command line arguments.
-     *
-     * @param args The given command line arguments
-     * @return A list of arguments not belonging to any defined argument, i.e.
-     * free arguments.
+     * When displaying the help message, collapse common parameters. By default all properties are displayed.
      */
-    @Nonnull
-    public List<String> parse(String... args) {
-        List<String> rest = new ArrayList<>();
-        Set<ArgResult> found = new LinkedHashSet<>();
-        Iterator<String> iterator = canonicalArgs(args);
-        String helpText = null;
-        while (iterator.hasNext()) {
-            String arg = iterator.next();
-            ArgResult cons = defs.get(arg);
-            if (helpText != null)
-                execError("No arguments should appear after help request");
-            else if (cons == HELP)
-                helpText = getHelpText(found, rest);
-            else if (cons != null) {
-                Set<ArgResult> reqDeps = depends.get(cons);
-                if (reqDeps != null && !containsAny(reqDeps, found))
-                    execError("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps));
-                if (found.contains(cons)) {
-                    if (!multi.contains(cons))
-                        execError("Argument " + getArg(cons) + " should appear only once");
-                } else
-                    found.add(cons);
-                if (passthrough.contains(cons))
-                    rest.add(arg);
-                if (transitive.contains(cons)) {
-                    if (!iterator.hasNext()) {
-                        execError("Too few arguments: unable to find value of argument " + arg);
-                        break;
-                    }
-                    arg = iterator.next();
-                    if (!nullable.contains(cons) && arg.isEmpty())
-                        execError("Parameter " + getArg(cons) + " should not have an empty value");
-                }
-                try {
-                    cons.result(arg);
-                } catch (Exception ex) {
-                    execError("Invalid parameter '" + getArg(cons) + "' using value '" + arg + "': " + ex.getMessage());
-                }
-            } else
-                rest.add(arg);
-        }
-        if (helpText != null) {
-            System.err.print(helpText);
-            System.exit(0);
-        }
-
-        // Check soft dependencies
-        for (ArgResult cons : found) {
-            Set<ArgResult> softDeps = softdepends.get(cons);
-            if (softDeps != null && !containsAny(softDeps, found))
-                execError("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps));
-        }
-
-        // Check Required
-        for (Set<ArgResult> group : required)
-            if (areArgsMissing(group, found))
-                if (group.size() == 1)
-                    execError("Argument " + getArg(group.iterator().next()) + " is required but not found");
-                else
-                    execError("At least one of arguments " + getArgs(group) + " are required but none found");
-
-        // Check Unique
-        for (Set<ArgResult> group : unique) {
-            Collection<ArgResult> list = getCommon(group, found);
-            if (list.size() > 1)
-                execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive");
-        }
-
-        // Check how many free arguments are allowed
-        if (rest.size() > freeArguments && freeArguments >= 0)
-            execError("The number of free arguments required are more than supported. Supported:" + freeArguments + " Found:" + rest.size());
-        return rest;
-    }
-
-    private boolean areArgsMissing(Collection<ArgResult> required, Collection<ArgResult> found) {
-        for (ArgResult req : required) {
-            if (found.contains(req))    // found one of the requirements
-                return false;
-            // Still missing, but maybe it is missing due to dependencies.
-            Collection<ArgResult> allDependencies = combine(depends.get(req), softdepends.get(req));   // get all dependencies
-            if (!allDependencies.isEmpty()   // indeed, it has a dependency
-                    && getCommon(allDependencies, found).isEmpty())     // the dependency is missing
-                return false;      // not really missing since the requirements are not fulfilled
-        }
-        return true;   // none of the possible instances of this requirement could be fulfilled
-    }
-
-    @Nonnull
-    public String getUsage() {
-        StringBuilder out = new StringBuilder();
-        getUsage(out, null);
-        if (out.length() > 0) {
-            String helparg = getArg(HELP);
-            if (!helparg.isEmpty())
-                print(out, "For a detailed description of all parameters, please invoke the application with the " + helparg + " parameter.");
-        }
-        return out.toString();
+    public Args collapseCommon() {
+        collapseCommon = true;
+        return this;
     }
 
     /**
@@ -568,48 +465,157 @@ public class Args {
         return this;
     }
 
-    private boolean getUsage(StringBuilder out, Collection<String> filter) {
-        StringBuilder uout = new StringBuilder();
-        usages(uout, filter);
-        if (uout.length() > 0) {
-            out.append("Usage:").append(NL);
-            out.append(uout);
-            return true;
-        }
-        return false;
+    /**
+     * Parse command line arguments.
+     *
+     * @param args The given command line arguments
+     * @return A list of arguments not belonging to any defined argument, i.e.
+     * free arguments.
+     */
+    public List<String> parse(String... args) {
+        return parse(null, args);
     }
 
-    @Override
+    /**
+     * Parse command line arguments.
+     *
+     * @param argumentChecker A callback to check the validity of the arguments. Could be null.
+     * @param args            The given command line arguments
+     * @return A list of arguments not belonging to any defined argument, i.e.
+     * free arguments.
+     */
     @Nonnull
-    public String toString() {
-        if (defs.isEmpty())
-            return "[No arguments defined]" + NL;
+    public List<String> parse(Supplier<Boolean> argumentChecker, String... args) {
+        List<String> rest = new ArrayList<>();
+        Set<ArgResult> found = new LinkedHashSet<>();
+        String groupName = null;
+        List<String> cArgs = new ArrayList<>(canonicalArgs(args));
+        if (cArgs.removeAll(helpArgs)) {
+            // A help argument is found
+            if (!cArgs.isEmpty() && !groups.isEmpty()) {
+                groupName = cArgs.get(0);
+                if (!groups.containsKey(groupName))
+                    execError("The subcommand " + cArgs.get(0) + " is not defined", null);
+            }
+            execHelp(groupName);
+        }
+        Iterator<String> iterator = cArgs.iterator();
+
+        Map<String, ArgResult> argPool;
+        // First find the group, if any
+        if (!groups.isEmpty()) {
+            if (!iterator.hasNext())
+                execError("The first argument should be the name of the subcommand", null);
+            groupName = iterator.next();
+            if (!groups.containsKey(groupName))
+                execError("The subcommand " + groupName + " is not defined", null);
+            // Group and common parameters are allowed
+            argPool = findMyNamedGroupArgs(groupName);
+            argPool.putAll(findRemainingNamedGroupArgs());
+        } else
+            argPool = defs;
+        while (iterator.hasNext()) {
+            String arg = iterator.next();
+            ArgResult cons = argPool.get(arg);
+            if (cons != null) {
+                Set<ArgResult> reqDeps = depends.get(cons);
+                if (reqDeps != null && !containsAny(reqDeps, found))
+                    execError("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps), groupName);
+                if (found.contains(cons)) {
+                    if (!multi.contains(cons))
+                        execError("Argument " + getArg(cons) + " should appear only once", groupName);
+                } else
+                    found.add(cons);
+                if (passthrough.contains(cons))
+                    rest.add(arg);
+                if (transitive.contains(cons)) {
+                    if (!iterator.hasNext()) {
+                        execError("Too few arguments: unable to find value of argument " + arg, groupName);
+                        break;
+                    }
+                    arg = iterator.next();
+                }
+                try {
+                    cons.result(arg);
+                } catch (Exception ex) {
+                    execError("Invalid parameter '" + getArg(cons) + "' using value '" + arg + "': " + ex.getMessage(), groupName);
+                }
+            } else
+                rest.add(arg);
+        }
+
+        // Check soft dependencies
+        for (ArgResult cons : found) {
+            Set<ArgResult> softDeps = softdepends.get(cons);
+            if (softDeps != null && !containsAny(softDeps, found))
+                execError("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps), groupName);
+        }
+
+        // Check Required
+        for (Set<ArgResult> items : required)
+            if (areArgsMissing(items, found))
+                if (items.size() == 1)
+                    execError("Argument " + getArg(items.iterator().next()) + " is required but not found", groupName);
+                else
+                    execError("At least one of arguments " + getArgs(items) + " are required but none found", groupName);
+
+        // Check Unique
+        for (Set<ArgResult> items : unique) {
+            Collection<ArgResult> list = getCommon(items, found);
+            if (list.size() > 1)
+                execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive", groupName);
+        }
+
+        // Check how many free arguments are allowed
+        if (freeArguments != null && rest.size() != freeArguments.length)
+            execError("The number of free arguments required are different than supported. Supported:" + freeArguments.length + " Found:" + rest.size(), groupName);
+        if (argumentChecker != null && !argumentChecker.get())
+            execError("Invalid arguments found", groupName);
+        return rest;
+    }
+
+    private boolean areArgsMissing(Collection<ArgResult> required, Collection<ArgResult> found) {
+        for (ArgResult req : required) {
+            if (found.contains(req))    // found one of the requirements
+                return false;
+            // Still missing, but maybe it is missing due to dependencies.
+            Collection<ArgResult> allDependencies = combine(depends.get(req), softdepends.get(req));   // get all dependencies
+            if (!allDependencies.isEmpty()   // indeed, it has a dependency
+                    && getCommon(allDependencies, found).isEmpty())     // the dependency is missing
+                return false;      // not really missing since the requirements are not fulfilled
+        }
+        return true;   // none of the possible instances of this requirement could be fulfilled
+    }
+
+    private String usageAsString(String group) {
         StringBuilder out = new StringBuilder();
+        out.append(Jerminal.getEmph(name)).append("  ").append(description).append(NL);
+        if (defs.isEmpty())
+            return out.toString();
+        out.append(NL);
+        Collection<ArgResult> remainingArgs = findRemainingArgs();
+        getUsage(out, group, remainingArgs);
+        groupArgs(out, group, remainingArgs);
 
-        if (getUsage(out, null))
-            out.append(NL);
-
-        groupArgs(out, null);
-
-        if (!required.isEmpty()) {
-            out.append(NL);
+        StringBuilder outInfo = new StringBuilder();
+        if (!required.isEmpty())
             for (Set<ArgResult> set : required)
-                print(out, (set.size() == 1 ? "Argument" : "One of the argument") + getArgsWithPlural(set) + " is required.");
-        }
+                print(outInfo, (set.size() == 1 ? "Argument" : "One of the argument") + getArgsWithPlural(set) + " is required.");
 
-        if (!unique.isEmpty()) {
-            out.append(NL);
+        if (!unique.isEmpty())
             for (Set<ArgResult> set : unique)
-                print(out, "Only one of argument" + getArgsWithPlural(set) + " could be used simultaneously; they are mutually exclusive.");
-        }
+                print(outInfo, "Only one of argument" + getArgsWithPlural(set) + " could be used simultaneously; they are mutually exclusive.");
 
-        printDependencies(out, depends, true);
-        printDependencies(out, softdepends, true);
+        printDependencies(outInfo, depends, true);
+        printDependencies(outInfo, softdepends, true);
 
-        if (!multi.isEmpty()) {
-            out.append(NL);
+        if (!multi.isEmpty())
             for (ArgResult m : multi)
-                print(out, "Argument " + getArg(m) + " can be used more than once.");
+                print(outInfo, "Argument " + getArg(m) + " can be used more than once.");
+
+        if (outInfo.length() > 0) {
+            out.append(NL);
+            out.append(outInfo);
         }
 
         if (condensedChar != '\0') {
@@ -651,7 +657,6 @@ public class Args {
 
     private void printDependencies(StringBuilder out, Map<ArgResult, Set<ArgResult>> cdeps, boolean strong) {
         if (!cdeps.isEmpty()) {
-            out.append(NL);
             Map<Set<ArgResult>, Collection<ArgResult>> depmap = new LinkedHashMap<>();    // dependencies, dependents
             for (ArgResult m : cdeps.keySet()) {
                 // Reconstruct multiple dependencies into groups of the same type
@@ -680,8 +685,8 @@ public class Args {
         }
     }
 
-    private Iterator<String> canonicalArgs(String[] args) {
-        List<String> source = args == null ? Collections.EMPTY_LIST : Arrays.asList(args);
+    private List<String> canonicalArgs(String[] args) {
+        List<String> source = args == null ? Collections.emptyList() : Arrays.asList(args);
         Collection<String> argname = defs.keySet();
         Collection<String> trans = getArgValues(this.transitive);
         if (joinedChar != '\0') {
@@ -733,47 +738,74 @@ public class Args {
             }
             source = result;
         }
-        return source.iterator();
+        return source;
     }
 
-    private boolean groupArgs(StringBuilder out, ArgResult filter) {
-        Set<ArgResult> args = new LinkedHashSet<>(defs.values());
+    private Map<String, ArgResult> findMyNamedGroupArgs(String groupName) {
+        if (groups.isEmpty())
+            return defs;
+        // It is not enough to filter arguments by their name, since we want all names pointing to
+        // a specific argument (even if they are aliases). So we first gather all unique arguments,
+        // and then use the arguments as a filter to gather the arguements, even if they have an alias.
+        Collection<ArgResult> groupArgs = getValuesByKeys(defs, groups.get(groupName));
+        return filterMatchingValues(defs, groupArgs);
+    }
+
+    private Collection<ArgResult> findMyArgs(String groupName) {
+        if (groups.isEmpty())
+            return new LinkedHashSet<>(defs.values());
+        return getValuesByKeys(defs, groups.get(groupName));
+    }
+
+    private Collection<ArgResult> findRemainingArgs() {
+        if (groups.isEmpty())
+            return Collections.emptySet();
+        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllValues(groups));
+        return findRemainingValues(defs, allGroupedArgs);
+    }
+
+    private Map<String, ArgResult> findRemainingNamedGroupArgs() {
+        if (groups.isEmpty())
+            return Collections.emptyMap();
+        // To get all common arguments, first we need to gather all arguments that belong to any group.
+        // Then we filter all arguments that do not belong in this group.
+        Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllValues(groups));
+        return filterNotMatchingValues(defs, allGroupedArgs);
+    }
+
+    private void groupArgs(StringBuilder out, String currentGroup, Collection<ArgResult> remainingArgs) {
+        Collection<NamedGroupArgs> namedGroups = new ArrayList<>();
+        if (groups.isEmpty())
+            namedGroups.add(new NamedGroupArgs(null, new LinkedHashSet<>(defs.values())));
+        else {
+            if (currentGroup != null)
+                namedGroups.add(new NamedGroupArgs("Subcommand '" + currentGroup + "'", findMyArgs(currentGroup)));
+            else
+                for (Map.Entry<String, Collection<String>> groupSet : groups.entrySet())
+                    namedGroups.add(new NamedGroupArgs("Subcommand '" + groupSet.getKey() + "'", findMyArgs(groupSet.getKey())));
+            // Find remaining groups
+            if (!remainingArgs.isEmpty())
+                namedGroups.add(new NamedGroupArgs("Common arguments", remainingArgs));
+        }
 
         List<List<String>> lefts = new ArrayList<>();
         List<List<String>> rights = new ArrayList<>();
         List<String> names = new ArrayList<>();
         int max = 0;
-        if (groups.isEmpty()) {
-            if (filter == null) {   // Only when no filter is applied
-                names.add("Arguments");
-                max = singleGroupCalc(args, lefts, rights);
-            }
-        } else {
-            Set<ArgResult> missing = new LinkedHashSet<>(defs.values());
-            for (String name : groups.keySet()) {
-                Set<ArgResult> groupItems = groups.get(name);
-                missing.removeAll(groupItems);
-                if (filter == null || groupItems.contains(filter)) {
-                    names.add(name);
-                    max = Math.max(max, singleGroupCalc(groupItems, lefts, rights));
-                }
-            }
-            if (filter == null || !names.isEmpty()) {
-                names.add("Generic arguments");
-                max = Math.max(max, singleGroupCalc(missing, lefts, rights));
-            }
+        for (NamedGroupArgs it : namedGroups) {
+            names.add(it.name);
+            max = Math.max(max, singleGroupCalc(it.args, lefts, rights));
         }
+
         max++;
         String secondLineInset = spaces(max + 4);
         for (int i = 0; i < names.size(); i++) {
-            if (i != 0)
-                out.append(NL);
+            out.append(NL);
             singleGroupPrint(names.get(i), lefts.get(i), rights.get(i), max, secondLineInset, out);
         }
-        return !names.isEmpty();
     }
 
-    private int singleGroupCalc(Set<ArgResult> args, List<List<String>> lefts, List<List<String>> rights) {
+    private int singleGroupCalc(Collection<ArgResult> args, List<List<String>> lefts, List<List<String>> rights) {
         int maxsize = 0;
         List<String> leftPart = new ArrayList<>();
         List<String> rightPart = new ArrayList<>();
@@ -790,6 +822,8 @@ public class Args {
     }
 
     private void singleGroupPrint(String title, List<String> leftPart, List<String> rightPart, int maxsize, String secondLineInset, StringBuilder out) {
+        if (title == null)
+            title = "Arguments";
         print(out, title + ":", "", "");
         for (int i = 0; i < leftPart.size(); i++) {
             String left = INSET + leftPart.get(i) + spaces(maxsize - leftPart.get(i).length()) + (rightPart.get(i).isEmpty() ? "" : ": ");
@@ -797,45 +831,59 @@ public class Args {
         }
     }
 
-    private void usages(StringBuilder out, Collection<String> filter) {
-        Collection<ArgResult> wrongParams = new LinkedHashSet<>();
-        for (List<String> usage : usages)
-            if (filter == null || !getCommon(usage, filter).isEmpty()) {
-                StringBuilder line = new StringBuilder();
-                List<ArgResult> trackUnique = new ArrayList<>();
-                Set<ArgResult> upToNow = new LinkedHashSet<>();
-                for (String arg : usage) {
-                    ArgResult res = defs.get(arg);
-                    if (res == null) {
-                        line.append(" ").append(arg);
-                        trackUnique.clear();
-                    } else {
-                        trackUnique.add(res);
-                        if (trackUnique.size() > 2)
-                            trackUnique.remove(0);
+    private String findUsageLine(String groupName, Collection<ArgResult> wrongParams, Collection<ArgResult> commonArgs) {
+        List<ArgResult> trackUnique = new ArrayList<>();
+        Set<ArgResult> upToNow = new LinkedHashSet<>();
+        StringBuilder line = new StringBuilder();
 
-                        Set<ArgResult> reqDeps = depends.get(res);
-                        boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
-                        if (missing)
-                            wrongParams.add(res);
-                        else {
-                            reqDeps = softdepends.get(res);
-                            missing = reqDeps != null && !containsAny(reqDeps, upToNow);
-                            if (missing)
-                                wrongParams.add(res);
-                        }
-                        upToNow.add(res);
+        if (groupName != null)
+            line.append(" ").append(groupName);
+        Collection<ArgResult> myArgs = findMyArgs(groupName);
+        if (!collapseCommon)
+            myArgs.addAll(commonArgs);
+        for (ArgResult res : myArgs) {
 
-                        boolean req = isInCollection(required, res);
-                        boolean morethanonce = multi.contains(res);
-                        line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
-                                append(req ? "" : "]").
-                                append(morethanonce ? "..." : "").
-                                append(missing ? "^" : "");
-                    }
-                }
-                print(out, line.substring(1), INSET, "");
+            trackUnique.add(res);
+            if (trackUnique.size() > 2)
+                trackUnique.remove(0);
+
+            Set<ArgResult> reqDeps = depends.get(res);
+            boolean missing = reqDeps != null && !containsAny(reqDeps, upToNow);
+            if (missing)
+                wrongParams.add(res);
+            else {
+                reqDeps = softdepends.get(res);
+                missing = reqDeps != null && !containsAny(reqDeps, upToNow);
+                if (missing)
+                    wrongParams.add(res);
             }
+            upToNow.add(res);
+
+            boolean req = isInCollection(required, res);
+            boolean morethanonce = multi.contains(res);
+            line.append(isUnique(unique, trackUnique) ? "|" : " ").append(req ? "" : "[").append(getArgWithParam(res, false)).
+                    append(req ? "" : "]").
+                    append(morethanonce ? "..." : "").
+                    append(missing ? "^" : "");
+        }
+        if (collapseCommon && !commonArgs.isEmpty())
+            line.append(" COMMON_ARGS...");
+        if (freeArguments == null)
+            line.append(" ARGS...");
+        else
+            for (String arg : freeArguments)
+                line.append(" ").append(arg);
+        return line.toString();
+    }
+
+    private void getUsage(StringBuilder out, String group, Collection<ArgResult> commonArgs) {
+        Collection<ArgResult> wrongParams = new LinkedHashSet<>();
+        out.append("Usage:").append(NL);
+        if (group == null && !groups.isEmpty())
+            for (String it : groups.keySet())
+                print(out, execName + findUsageLine(it, wrongParams, commonArgs), INSET + INSET, "");
+        else
+            print(out, execName + findUsageLine(group, wrongParams, commonArgs), INSET, "");
         if (!wrongParams.isEmpty()) {
             out.append("Notes:").append(NL);
             print(out, "^some pre-required arguments of the argument" + getArgsWithPlural(wrongParams) + " have been hidden for clarity",
@@ -854,14 +902,14 @@ public class Args {
 
     private String checkNotExists(String arg) throws ArgumentException {
         arg = checkValid(arg);
-        if (defs.containsKey(arg))
+        if (defs.containsKey(arg) || helpArgs.contains(arg))
             throw new ArgumentException("Argument " + arg + " already defined");
         return arg;
     }
 
     private String checkExist(String arg) throws ArgumentException {
         arg = checkValid(arg);
-        if (!defs.containsKey(arg))
+        if (!(defs.containsKey(arg) || helpArgs.contains(arg)))
             throw new ArgumentException("Argument " + arg + " not found");
         return arg;
     }
@@ -875,38 +923,6 @@ public class Args {
         if (arg.contains(" "))
             throw new ArgumentException("Argument could not contain space character");
         return arg;
-    }
-
-    private <T> Collection<T> getCommon(Collection<T> group1, Collection<T> group2) {
-        Collection<T> list = new ArrayList<>();
-        if (group1 != null && group2 != null)
-            for (T item : group1)
-                if (group2.contains(item))
-                    list.add(item);
-        return list;
-    }
-
-    private <T> boolean containsAny(Collection<T> base, Collection<T> request) {
-        for (T item : request)
-            if (base.contains(item))
-                return true;
-        return false;
-    }
-
-    private <T> boolean isInCollection(Collection<Set<T>> collection, T arg) {
-        for (Set<T> set : collection)
-            if (set.contains(arg))
-                return true;
-        return false;
-    }
-
-    private <T> boolean isUnique(Collection<Set<T>> sets, Collection<T> toCheck) {
-        if (toCheck.size() < 2)
-            return false;
-        for (Set<T> group : sets)
-            if (getCommon(group, toCheck).size() == 2)
-                return true;
-        return false;
     }
 
     private String getArg(ArgResult cons) {
@@ -975,4 +991,35 @@ public class Args {
         return out.toString();
     }
 
+    private void execHelp(String group) {
+        System.out.print(usageAsString(group));
+        System.out.flush();
+        System.exit(0);
+    }
+
+    private void execError(String errorMessage, String group) {
+        if (errorStrategy != null && errorStrategy.requiresHelp)
+            System.out.println(usageAsString(group));
+        (errorArg == null ? ((errorStrategy == null ? THROW_EXCEPTION : errorStrategy).getBehavior(this)) : errorArg).result(errorMessage);
+    }
+}
+
+class NamedGroupArgs {
+    final String name;
+    final Collection<ArgResult> args;
+
+    NamedGroupArgs(String name, Collection<ArgResult> args) {
+        this.name = name;
+        this.args = args;
+    }
+}
+
+class GroupedArgsWithParams {
+    final Map<String, ArgResult> grouped;
+    final Map<String, ArgResult> free;
+
+    GroupedArgsWithParams(Map<String, ArgResult> grouped, Map<String, ArgResult> free) {
+        this.grouped = grouped;
+        this.free = free;
+    }
 }

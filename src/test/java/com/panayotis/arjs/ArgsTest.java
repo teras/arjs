@@ -5,14 +5,14 @@
  */
 package com.panayotis.arjs;
 
+import org.junit.Test;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
-
-import org.junit.Test;
 
 /**
  * @author teras
@@ -27,7 +27,7 @@ public class ArgsTest {
         MultiBoolArg mboolA = new MultiBoolArg();
         MultiBoolArg mboolB = new MultiBoolArg();
         MultiStringArg mstring = new MultiStringArg();
-        Args args = new Args();
+        Args args = new Args("", "");
         args.
                 def("/a", mboolA).
                 def("/b", mboolB).
@@ -36,9 +36,9 @@ public class ArgsTest {
         args.setCondensed('/');
         args.setJoined(':');
         List<String> free = args.parse("/a", "/aa", "/aaasbbasa", "one", "two", "/s:three", "/b", "/a:another", "/s", "four", "/s:five", "/b");
-        assertEquals("Condensed notation error with paramter /a,", (Integer) 8, mboolA.get());
-        assertEquals("Condensed notation error with paramter /b,", (Integer) 4, mboolB.get());
-        assertEquals("Multi string with condensed mode", "[one, two, three, four, five]", mstring.get().toString());
+        assertEquals("Condensed notation error with paramter /a,", (Integer) 8, mboolA.getValue());
+        assertEquals("Condensed notation error with paramter /b,", (Integer) 4, mboolB.getValue());
+        assertEquals("Multi string with condensed mode", "[one, two, three, four, five]", mstring.getValue().toString());
         assertEquals("A free parameter should exist, since /a is not a transitive parameter,", "[/a:another]", free.toString());
     }
 
@@ -51,7 +51,7 @@ public class ArgsTest {
         MultiStringArg mstring = new MultiStringArg();
         MultiStringArg mdefstring = new MultiStringArg("hello", "hi");
 
-        Args args = new Args();
+        Args args = new Args("", "");
         args.
                 def("-b", bool).
                 def("-s", string).
@@ -61,78 +61,78 @@ public class ArgsTest {
                 def("-D", mdefstring);
 
         args.parse("something", "else");
-        assertFalse("Default boolean should be false", bool.get());
-        assertNull("Default String should be null", string.get());
-        assertEquals("Default String with default,", "hey", defstring.get());
-        assertEquals("Default multi bool,", (Integer) 0, mbool.get());
-        assertTrue("Default multi String should be empty", mstring.get().isEmpty());
-        assertTrue("Default multi String with default should contain 'hello' and 'hi'", mdefstring.get().size() == 2 && mdefstring.get().contains("hello") && mdefstring.get().contains("hi"));
+        assertFalse("Default boolean should be false", bool.getValue());
+        assertNull("Default String should be null", string.getValue());
+        assertEquals("Default String with default,", "hey", defstring.getValue());
+        assertEquals("Default multi bool,", (Integer) 0, mbool.getValue());
+        assertTrue("Default multi String should be empty", mstring.getValue().isEmpty());
+        assertTrue("Default multi String with default should contain 'hello' and 'hi'", mdefstring.getValue().size() == 2 && mdefstring.getValue().contains("hello") && mdefstring.getValue().contains("hi"));
 
         args.parse("something", "-b", "else", "-B", "-B", "-s", "one", "-d", "two", "-S", "S1", "-S", "S2", "-D", "D1");
-        assertTrue("Boolean value defined and should be true", bool.get());
-        assertEquals("Multi bool value appeared twice,", (Integer) 2, mbool.get());
-        assertEquals("String argument,", "one", string.get());
-        assertEquals("Default string argument,", "two", defstring.get());
-        assertEquals("Multy String size,", 2, mstring.get().size());
-        assertEquals("Default multy String size,", 3, mdefstring.get().size());
+        assertTrue("Boolean value defined and should be true", bool.getValue());
+        assertEquals("Multi bool value appeared twice,", (Integer) 2, mbool.getValue());
+        assertEquals("String argument,", "one", string.getValue());
+        assertEquals("Default string argument,", "two", defstring.getValue());
+        assertEquals("Multy String size,", 2, mstring.getValue().size());
+        assertEquals("Default multy String size,", 3, mdefstring.getValue().size());
 
         args.parse("-B", "-s", "three", "-S", "S3", "-S", "S4", "-D", "D2", "-D", "D3");
-        assertEquals("String argument,", "three", string.get());
-        assertEquals("Multy String size,", 4, mstring.get().size());
-        assertEquals("Default multy String size,", 5, mdefstring.get().size());
-        assertEquals("Multi String contents", "[S1, S2, S3, S4]", mstring.get().toString());
-        assertEquals("Default multi String contents", "[hello, hi, D1, D2, D3]", mdefstring.get().toString());
+        assertEquals("String argument,", "three", string.getValue());
+        assertEquals("Multy String size,", 4, mstring.getValue().size());
+        assertEquals("Default multy String size,", 5, mdefstring.getValue().size());
+        assertEquals("Multi String contents", "[S1, S2, S3, S4]", mstring.getValue().toString());
+        assertEquals("Default multi String contents", "[hello, hi, D1, D2, D3]", mdefstring.getValue().toString());
     }
 
     @Test
     public void testBooleanInverse() {
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("hello");
-            assertFalse(t.get());
-            assertTrue(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
+            assertFalse(t.getValue());
+            assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("hello");
-            assertTrue(t.get());
-            assertFalse(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
+            assertTrue(t.getValue());
+            assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p");
-            assertTrue(t.get());
-            assertFalse(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p");
+            assertTrue(t.getValue());
+            assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n");
-            assertFalse(t.get());
-            assertTrue(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n");
+            assertFalse(t.getValue());
+            assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
-            assertFalse(t.get());
-            assertTrue(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            assertFalse(t.getValue());
+            assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
-            assertTrue(t.get());
-            assertFalse(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            assertTrue(t.getValue());
+            assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
-            assertFalse(t.get());
-            assertTrue(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            assertFalse(t.getValue());
+            assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args().def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
-            assertTrue(t.get());
-            assertFalse(t.getInverse().get());
+            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            assertTrue(t.getValue());
+            assertFalse(t.getInverse().getValue());
         }
     }
 
@@ -148,7 +148,7 @@ public class ArgsTest {
         AtomicInteger multi = new AtomicInteger();
         List<String> rest2;
 
-        Args args = new Args()
+        Args args = new Args("", "")
                 .def("-h", () -> help.set(true))
                 .def("--multi", () -> multi.addAndGet(1))
                 .multi("--multi")

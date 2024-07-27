@@ -6,17 +6,28 @@
 package com.panayotis.arjs;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- *
  * @author teras
  */
 public class MultiDecimalArg extends MultiTypedArg<BigDecimal> {
 
+    /**
+     * Create a new multiple decimal argument with given values
+     *
+     * @param val The values of the argument
+     */
     public MultiDecimalArg(double... val) {
         this(convert(val));
     }
 
+    /**
+     * Create a new multiple decimal argument with given values
+     *
+     * @param val The values of the argument
+     */
     public MultiDecimalArg(BigDecimal... val) {
         super(DecimalArg.conv, val);
     }
@@ -30,4 +41,21 @@ public class MultiDecimalArg extends MultiTypedArg<BigDecimal> {
         return result;
     }
 
+    /**
+     * Get this argument as a list of floats
+     *
+     * @return The list of float values of this argument
+     */
+    public List<Float> getFloats() {
+        return getValue().stream().map(BigDecimal::floatValue).collect(Collectors.toList());
+    }
+
+    /**
+     * Get this argument as a list of doubles
+     *
+     * @return The list of double values of this argument
+     */
+    public List<Double> getDoubles() {
+        return getValue().stream().map(BigDecimal::doubleValue).collect(Collectors.toList());
+    }
 }

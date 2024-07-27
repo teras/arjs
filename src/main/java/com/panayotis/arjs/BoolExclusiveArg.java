@@ -14,7 +14,7 @@ public class BoolExclusiveArg extends BoolArg {
     private BoolExclusiveArg(Boolean status, boolean shouldMakeInverse) {
         super(status != null && status);
         if (shouldMakeInverse) {
-            inverse = new BoolExclusiveArg(!get(), false);
+            inverse = new BoolExclusiveArg(!getValue(), false);
             inverse.inverse = this;
         }
     }

@@ -17,7 +17,7 @@ public class MultiBoolArg extends BaseArg<Integer> implements MultiArg {
 
     @Override
     protected boolean set(String val) {
-        return setVal(get() + 1);
+        return setVal(getValue() + 1);
     }
 
 }

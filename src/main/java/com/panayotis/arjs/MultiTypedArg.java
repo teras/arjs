@@ -29,7 +29,7 @@ public class MultiTypedArg<T> extends BaseArg<List<T>> implements MultiArg, Tran
         T v = converter.apply(val);
         if (v == null)
             return false;
-        get().add(v);
+        getValue().add(v);
         return true;
     }
 

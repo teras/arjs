@@ -16,7 +16,7 @@ public abstract class BaseArg<T> {
         this.val = val;
     }
 
-    public T get() {
+    public T getValue() {
         return val;
     }
 
