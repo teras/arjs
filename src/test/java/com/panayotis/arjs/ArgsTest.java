@@ -5,14 +5,16 @@
  */
 package com.panayotis.arjs;
 
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 /**
  * @author teras
@@ -36,10 +38,10 @@ public class ArgsTest {
         args.setCondensed('/');
         args.setJoined(':');
         List<String> free = args.parse("/a", "/aa", "/aaasbbasa", "one", "two", "/s:three", "/b", "/a:another", "/s", "four", "/s:five", "/b");
-        assertEquals("Condensed notation error with paramter /a,", (Integer) 8, mboolA.getValue());
-        assertEquals("Condensed notation error with paramter /b,", (Integer) 4, mboolB.getValue());
-        assertEquals("Multi string with condensed mode", "[one, two, three, four, five]", mstring.getValue().toString());
-        assertEquals("A free parameter should exist, since /a is not a transitive parameter,", "[/a:another]", free.toString());
+        assertEquals((Integer) 8, mboolA.getValue(), "Condensed notation error with paramter /a,");
+        assertEquals((Integer) 4, mboolB.getValue(), "Condensed notation error with paramter /b,");
+        assertEquals("[one, two, three, four, five]", mstring.getValue().toString(), "Multi string with condensed mode");
+        assertEquals("[/a:another]", free.toString(), "A free parameter should exist, since /a is not a transitive parameter,");
     }
 
     @Test
@@ -61,27 +63,27 @@ public class ArgsTest {
                 def("-D", mdefstring);
 
         args.parse("something", "else");
-        assertFalse("Default boolean should be false", bool.getValue());
-        assertNull("Default String should be null", string.getValue());
-        assertEquals("Default String with default,", "hey", defstring.getValue());
-        assertEquals("Default multi bool,", (Integer) 0, mbool.getValue());
-        assertTrue("Default multi String should be empty", mstring.getValue().isEmpty());
-        assertTrue("Default multi String with default should contain 'hello' and 'hi'", mdefstring.getValue().size() == 2 && mdefstring.getValue().contains("hello") && mdefstring.getValue().contains("hi"));
+        assertFalse(bool.getValue(), "Default boolean should be false");
+        assertNull(string.getValue(), "Default String should be null");
+        assertEquals("hey", defstring.getValue(), "Default String with default,");
+        assertEquals((Integer) 0, mbool.getValue(), "Default multi bool,");
+        assertTrue(mstring.getValue().isEmpty(), "Default multi String should be empty");
+        assertTrue(mdefstring.getValue().size() == 2 && mdefstring.getValue().contains("hello") && mdefstring.getValue().contains("hi"), "Default multi String with default should contain 'hello' and 'hi'");
 
         args.parse("something", "-b", "else", "-B", "-B", "-s", "one", "-d", "two", "-S", "S1", "-S", "S2", "-D", "D1");
-        assertTrue("Boolean value defined and should be true", bool.getValue());
-        assertEquals("Multi bool value appeared twice,", (Integer) 2, mbool.getValue());
-        assertEquals("String argument,", "one", string.getValue());
-        assertEquals("Default string argument,", "two", defstring.getValue());
-        assertEquals("Multy String size,", 2, mstring.getValue().size());
-        assertEquals("Default multy String size,", 3, mdefstring.getValue().size());
+        assertTrue(bool.getValue(), "Boolean value defined and should be true");
+        assertEquals((Integer) 2, mbool.getValue(), "Multi bool value appeared twice,");
+        assertEquals("one", string.getValue(), "String argument,");
+        assertEquals("two", defstring.getValue(), "Default string argument,");
+        assertEquals(2, mstring.getValue().size(), "Multy String size,");
+        assertEquals(3, mdefstring.getValue().size(), "Default multy String size,");
 
         args.parse("-B", "-s", "three", "-S", "S3", "-S", "S4", "-D", "D2", "-D", "D3");
-        assertEquals("String argument,", "three", string.getValue());
-        assertEquals("Multy String size,", 4, mstring.getValue().size());
-        assertEquals("Default multy String size,", 5, mdefstring.getValue().size());
-        assertEquals("Multi String contents", "[S1, S2, S3, S4]", mstring.getValue().toString());
-        assertEquals("Default multi String contents", "[hello, hi, D1, D2, D3]", mdefstring.getValue().toString());
+        assertEquals("three", string.getValue(), "String argument,");
+        assertEquals(4, mstring.getValue().size(), "Multy String size,");
+        assertEquals(5, mdefstring.getValue().size(), "Default multy String size,");
+        assertEquals("[S1, S2, S3, S4]", mstring.getValue().toString(), "Multi String contents");
+        assertEquals("[hello, hi, D1, D2, D3]", mdefstring.getValue().toString(), "Default multi String contents");
     }
 
     @Test
@@ -164,30 +166,30 @@ public class ArgsTest {
         args.parse();
 
         args.parse("-h");
-        assertTrue("Help argument not found", help.get());
+        assertTrue(help.get(), "Help argument not found");
         System.out.println(error.get());
         assertNotNull("Should fail with missing argument", error.get());
 
         reset(help, run, output, error, multi);
         args.parse("-o", "something", "--run");
-        assertTrue("Wrong type of error, expected \"uniq\"", error.get() != null && error.get().contains("uniq"));
-        assertTrue("Error should contain '[--output, --run]' ", error.get().contains("[--output, --run]"));
+        assertTrue(error.get() != null && error.get().contains("uniq"), "Wrong type of error, expected \"uniq\"");
+        assertTrue(error.get().contains("[--output, --run]"), "Error should contain '[--output, --run]' ");
 
         reset(help, run, output, error, multi);
         rest2 = args.parse("-h", "-h", "unknown", "--help");
-        assertFalse("Should fail with rest argument non existent", rest2.isEmpty());
-        assertEquals("Size of missing arguments does not match", 1, rest2.size());
-        assertEquals("Missing argument does not match", "unknown", rest2.get(0));
+        assertFalse(rest2.isEmpty(), "Should fail with rest argument non existent");
+        assertEquals(1, rest2.size(), "Size of missing arguments does not match");
+        assertEquals("unknown", rest2.get(0), "Missing argument does not match");
 
         reset(help, run, output, error, multi);
         args.parse("-h", "-o", "some", "--multi", "--multi");
-        assertNull("No errors should be found", error.get());
-        assertEquals("Output should be parsed", "some", output.get());
-        assertEquals("Multiple parameter should be called twice", 2, multi.get());
+        assertNull(error.get(), "No errors should be found");
+        assertEquals("some", output.get(), "Output should be parsed");
+        assertEquals(2, multi.get(), "Multiple parameter should be called twice");
 
         reset(help, run, output, error, multi);
         args.parse("-h", "-h", "-o");
-        assertTrue("Wrong type of error, expected \"Too few arguments\"", error.get() != null && error.get().contains("few"));
+        assertTrue(error.get() != null && error.get().contains("few"), "Wrong type of error, expected \"Too few arguments\"");
     }
 
     private void reset(AtomicBoolean help, AtomicBoolean run, AtomicReference<String> output, AtomicReference<String> error, AtomicInteger multi) {
