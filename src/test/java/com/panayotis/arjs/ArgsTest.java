@@ -27,7 +27,7 @@ public class ArgsTest {
         MultiBoolArg mboolA = new MultiBoolArg();
         MultiBoolArg mboolB = new MultiBoolArg();
         MultiStringArg mstring = new MultiStringArg();
-        Args args = new Args("", "");
+        Args args = new Args("myapp", "");
         args.
                 def("/a", mboolA).
                 def("/b", mboolB).
@@ -51,7 +51,7 @@ public class ArgsTest {
         MultiStringArg mstring = new MultiStringArg();
         MultiStringArg mdefstring = new MultiStringArg("hello", "hi");
 
-        Args args = new Args("", "");
+        Args args = new Args("myapp", "");
         args.
                 def("-b", bool).
                 def("-s", string).
@@ -88,49 +88,49 @@ public class ArgsTest {
     public void testBooleanInverse() {
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
             assertFalse(t.getValue());
             assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("hello");
             assertTrue(t.getValue());
             assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-p");
             assertTrue(t.getValue());
             assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-n");
             assertFalse(t.getValue());
             assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
             assertFalse(t.getValue());
             assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg();
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
             assertTrue(t.getValue());
             assertFalse(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-p", "-n");
             assertFalse(t.getValue());
             assertTrue(t.getInverse().getValue());
         }
         {
             BoolExclusiveArg t = new BoolExclusiveArg(true);
-            new Args("", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
+            new Args("myapp", "").def("-p", t).def("-n", t.getInverse()).parse("-n", "-p");
             assertTrue(t.getValue());
             assertFalse(t.getInverse().getValue());
         }
@@ -148,7 +148,7 @@ public class ArgsTest {
         AtomicInteger multi = new AtomicInteger();
         List<String> rest2;
 
-        Args args = new Args("", "")
+        Args args = new Args("myapp", "")
                 .def("-h", () -> help.set(true))
                 .def("--multi", () -> multi.addAndGet(1))
                 .multi("--multi")

@@ -12,7 +12,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 import static com.panayotis.arjs.CollectionUtils.*;
-import static com.panayotis.arjs.ErrorStrategy.THROW_EXCEPTION;
+import static com.panayotis.arjs.ErrorStrategy.PRINT_HELP_AND_THROW_EXCEPTION;
 import static com.panayotis.arjs.HelpUtils.combine;
 import static com.panayotis.arjs.HelpUtils.spaces;
 import static java.util.Objects.requireNonNull;
@@ -50,8 +50,10 @@ public class Args {
     private boolean collapseCommon = false;
 
     public Args(String name, String description) {
+        if (name == null || name.trim().isEmpty())
+            throw new ArgumentException("Application name should not be empty");
         this.name = name;
-        this.description = description;
+        this.description = description == null || description.trim().isEmpty() ? null : description.trim();
     }
 
     /**
@@ -290,10 +292,12 @@ public class Args {
     }
 
     /**
-     * List of parameters that could be used more than once. By default a
+     * List of parameters that could be used more than once. By default, a
      * parameter could be used at most once, and an error is thrown if it is
      * used more than once. With this option the defined parameters are allowed
      * to be called more than once.
+     * <p>
+     * NOTE: This option is automatically enabled for Multi*Arg arguments.
      *
      * @param multi List of parameters that could be called more than once.
      * @return Self reference
@@ -613,7 +617,9 @@ public class Args {
 
     private String usageAsString(String group) {
         StringBuilder out = new StringBuilder();
-        out.append(Jerminal.getEmph(name)).append("  ").append(description).append(NL);
+        out.append(Jerminal.getEmph(name));
+        if (description != null)
+            out.append(" - ").append(description).append(NL);
         if (defs.isEmpty())
             return out.toString();
         out.append(NL);
@@ -905,11 +911,12 @@ public class Args {
     private void getUsage(StringBuilder out, String group, Collection<ArgResult> commonArgs) {
         Collection<ArgResult> wrongParams = new LinkedHashSet<>();
         out.append("Usage:").append(NL);
+        String exec = execName == null ? name : execName;
         if (group == null && !groups.isEmpty())
             for (String it : groups.keySet())
-                print(out, execName + findUsageLine(it, wrongParams, commonArgs), INSET, "");
+                print(out, exec + findUsageLine(it, wrongParams, commonArgs), INSET, "");
         else
-            print(out, execName + findUsageLine(group, wrongParams, commonArgs), INSET, "");
+            print(out, exec + findUsageLine(group, wrongParams, commonArgs), INSET, "");
         if (!wrongParams.isEmpty()) {
             out.append("Notes:").append(NL);
             print(out, "^some pre-required arguments of the argument" + getArgsWithPlural(wrongParams) + " have been hidden for clarity",
@@ -1024,9 +1031,12 @@ public class Args {
     }
 
     private void execError(String errorMessage, String group) {
-        if (errorStrategy != null && errorStrategy.requiresHelp)
+        ErrorStrategy strategy = this.errorStrategy;
+        if (strategy == null)
+            strategy = PRINT_HELP_AND_THROW_EXCEPTION;
+        if (strategy.requiresHelp)
             System.out.println(usageAsString(group));
-        (errorArg == null ? ((errorStrategy == null ? THROW_EXCEPTION : errorStrategy).getBehavior(this)) : errorArg).result(errorMessage);
+        (errorArg == null ? strategy.getBehavior(this) : errorArg).result(errorMessage);
     }
 }
 
