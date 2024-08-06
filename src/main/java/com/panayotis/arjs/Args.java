@@ -56,6 +56,32 @@ public class Args {
         this.description = description == null || description.trim().isEmpty() ? null : description.trim();
     }
 
+    private Map<ArgResult, Set<ArgResult>> filtered(Map<ArgResult, Set<ArgResult>> all, Map<String, ArgResult> acceptable) {
+        Map<ArgResult, Set<ArgResult>> filtered = new LinkedHashMap<>();
+        for (Map.Entry<ArgResult, Set<ArgResult>> entry : all.entrySet()) {
+            Set<ArgResult> filteredSet = new LinkedHashSet<>();
+            for (ArgResult arg : entry.getValue())
+                if (acceptable.containsValue(arg))
+                    filteredSet.add(arg);
+            if (!filteredSet.isEmpty())
+                filtered.put(entry.getKey(), filteredSet);
+        }
+        return filtered;
+    }
+
+    private List<Set<ArgResult>> filtered(List<Set<ArgResult>> all, Map<String, ArgResult> acceptable) {
+        List<Set<ArgResult>> filtered = new ArrayList<>();
+        for (Set<ArgResult> set : all) {
+            Set<ArgResult> filteredSet = new LinkedHashSet<>();
+            for (ArgResult arg : set)
+                if (acceptable.containsValue(arg))
+                    filteredSet.add(arg);
+            if (!filteredSet.isEmpty())
+                filtered.add(filteredSet);
+        }
+        return filtered;
+    }
+
     /**
      * Define a new parameter
      *
@@ -542,11 +568,12 @@ public class Args {
             argPool.putAll(findRemainingNamedGroupArgs());
         } else
             argPool = defs;
+        Map<ArgResult, Set<ArgResult>> filteredDepends = filtered(depends, argPool);
         while (iterator.hasNext()) {
             String arg = iterator.next();
             ArgResult cons = argPool.get(arg);
             if (cons != null) {
-                Set<ArgResult> reqDeps = depends.get(cons);
+                Set<ArgResult> reqDeps = filteredDepends.get(cons);
                 if (reqDeps != null && !containsAny(reqDeps, found))
                     execError("Argument " + getArg(cons) + " pre-requires one of missing arguments: " + getArgs(reqDeps), groupName);
                 if (found.contains(cons)) {
@@ -573,14 +600,15 @@ public class Args {
         }
 
         // Check soft dependencies
+        Map<ArgResult, Set<ArgResult>> filteredSoftDepends = filtered(softdepends, argPool);
         for (ArgResult cons : found) {
-            Set<ArgResult> softDeps = softdepends.get(cons);
+            Set<ArgResult> softDeps = filteredSoftDepends.get(cons);
             if (softDeps != null && !containsAny(softDeps, found))
                 execError("Argument " + getArg(cons) + " requires one of missing arguments: " + getArgs(softDeps), groupName);
         }
 
         // Check Required
-        for (Set<ArgResult> items : required)
+        for (Set<ArgResult> items : filtered(required, argPool))
             if (areArgsMissing(items, found))
                 if (items.size() == 1)
                     execError("Argument " + getArg(items.iterator().next()) + " is required but not found", groupName);
@@ -588,7 +616,7 @@ public class Args {
                     execError("At least one of arguments " + getArgs(items) + " are required but none found", groupName);
 
         // Check Unique
-        for (Set<ArgResult> items : unique) {
+        for (Set<ArgResult> items : filtered(unique, argPool)) {
             Collection<ArgResult> list = getCommon(items, found);
             if (list.size() > 1)
                 execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive", groupName);
