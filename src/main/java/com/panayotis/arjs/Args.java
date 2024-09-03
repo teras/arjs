@@ -617,7 +617,7 @@ public class Args {
 
         // Check Unique
         for (Set<ArgResult> items : filtered(unique, argPool)) {
-            Collection<ArgResult> list = getCommon(items, found);
+            Collection<ArgResult> list = filterCommon(items, found);
             if (list.size() > 1)
                 execError("Argument" + getArgsWithPlural(list) + " are unique and mutually exclusive", groupName);
         }
@@ -637,7 +637,7 @@ public class Args {
             // Still missing, but maybe it is missing due to dependencies.
             Collection<ArgResult> allDependencies = combine(depends.get(req), softdepends.get(req));   // get all dependencies
             if (!allDependencies.isEmpty()   // indeed, it has a dependency
-                    && getCommon(allDependencies, found).isEmpty())     // the dependency is missing
+                    && filterCommon(allDependencies, found).isEmpty())     // the dependency is missing
                 return false;      // not really missing since the requirements are not fulfilled
         }
         return true;   // none of the possible instances of this requirement could be fulfilled
@@ -652,23 +652,24 @@ public class Args {
             return out.toString();
         out.append(NL);
         Collection<ArgResult> remainingArgs = findRemainingArgs();
+        Collection<ArgResult> activeArgs = findActiveArgs(group, remainingArgs);
         getUsage(out, group, remainingArgs);
         groupArgs(out, group, remainingArgs);
 
         StringBuilder outInfo = new StringBuilder();
         if (!required.isEmpty())
-            for (Set<ArgResult> set : required)
+            for (Set<ArgResult> set : filterCommon(required, activeArgs))
                 print(outInfo, (set.size() == 1 ? "Argument" : "One of the argument") + getArgsWithPlural(set) + " is required.");
 
         if (!unique.isEmpty())
-            for (Set<ArgResult> set : unique)
+            for (Set<ArgResult> set : filterCommon(unique, activeArgs))
                 print(outInfo, "Only one of argument" + getArgsWithPlural(set) + " could be used simultaneously; they are mutually exclusive.");
 
         printDependencies(outInfo, depends, true);
         printDependencies(outInfo, softdepends, true);
 
         if (!multi.isEmpty())
-            for (ArgResult m : multi)
+            for (ArgResult m : filterCommon(multi, activeArgs))
                 print(outInfo, "Argument " + getArg(m) + " can be used more than once.");
 
         if (outInfo.length() > 0) {
@@ -820,6 +821,18 @@ public class Args {
             return Collections.emptySet();
         Collection<ArgResult> allGroupedArgs = getValuesByKeys(defs, gatherAllArgs(groups));
         return findRemainingValues(defs, allGroupedArgs);
+    }
+
+
+    private Collection<ArgResult> findActiveArgs(String group, Collection<ArgResult> remainingArgs) {
+        // Find active args
+        Collection<ArgResult> activeArgs;
+        if (group != null) {
+            activeArgs = findMyArgs(group);
+            activeArgs.addAll(remainingArgs);
+        } else
+            activeArgs = defs.values();
+        return activeArgs;
     }
 
     private Map<String, ArgResult> findRemainingNamedGroupArgs() {

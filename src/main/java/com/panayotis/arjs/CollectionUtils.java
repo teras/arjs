@@ -63,7 +63,17 @@ public class CollectionUtils {
         return result;
     }
 
-    static <T> Collection<T> getCommon(Collection<T> group1, Collection<T> group2) {
+    static <T> List<Set<T>> filterCommon(List<Set<T>> original, Collection<T> active) {
+        List<Set<T>> result = new ArrayList<>();
+        for (Collection<T> set : original) {
+            Collection<T> common = filterCommon(set, active);
+            if (!common.isEmpty())
+                result.add(new LinkedHashSet<>(common));
+        }
+        return result;
+    }
+
+    static <T> Collection<T> filterCommon(Collection<T> group1, Collection<T> group2) {
         Collection<T> list = new ArrayList<>();
         if (group1 != null && group2 != null)
             for (T item : group1)
@@ -90,7 +100,7 @@ public class CollectionUtils {
         if (toCheck.size() < 2)
             return false;
         for (Set<T> group : sets)
-            if (getCommon(group, toCheck).size() == 2)
+            if (filterCommon(group, toCheck).size() == 2)
                 return true;
         return false;
     }
